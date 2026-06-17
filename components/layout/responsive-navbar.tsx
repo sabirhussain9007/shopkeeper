@@ -206,7 +206,7 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
               );
             })}
           </nav>
-          <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {/* <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             {email ? (
               <Button className="w-full" variant="ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="h-4 w-4" />
@@ -220,7 +220,40 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
                 </Link>
               </Button>
             )}
-          </div>
+          </div> */}
+
+
+
+<div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+  {email ? (
+    <Button
+      className="w-full"
+      variant="ghost"
+      onClick={() =>
+        signOut({
+          callbackUrl: `${window.location.origin}/login`,
+        })
+      }
+    >
+      <LogOut className="h-4 w-4" />
+      Logout
+    </Button>
+  ) : (
+    <Button asChild className="w-full">
+      <Link href="/login" onClick={() => setOpen(false)}>
+        <LogIn className="h-4 w-4" />
+        Login
+      </Link>
+    </Button>
+  )}
+</div>
+
+
+
+
+
+
+
         </div>
       ) : null}
     </header>
