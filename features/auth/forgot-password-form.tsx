@@ -51,7 +51,7 @@ export function ForgotPasswordForm() {
           </div>
         </div>
       </div>
-      <div className="space-y-4 bg-[#f6f8f5] px-6 py-8 text-zinc-950 md:px-8">
+      <div className="space-y-4 bg-[var(--panel)] px-6 py-8 text-zinc-950 md:px-8">
         <Input name="email" type="email" placeholder="Email address" required autoComplete="email" className="bg-white" />
         <Button className="w-full" type="submit" loading={isPending} loadingLabel="Sending...">
           Send reset link

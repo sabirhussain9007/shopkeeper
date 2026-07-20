@@ -63,7 +63,7 @@ export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
         ) : null}
       </Button>
       {open ? (
-        <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-zinc-200 bg-[#f6f8f5] shadow-xl shadow-emerald-950/20">
+        <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-zinc-200 bg-[var(--panel)] shadow-xl shadow-emerald-950/20">
           <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2">
             <p className="text-sm font-semibold">Notifications</p>
             <button type="button" className="text-xs text-emerald-700 hover:underline" onClick={() => void markAll()}>

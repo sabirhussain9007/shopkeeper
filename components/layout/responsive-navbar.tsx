@@ -246,7 +246,7 @@ export function ResponsiveNavbar({
 
                   {dropdown === group.label ? (
                     <div
-                      className="absolute left-0 top-full z-50 mt-2 w-56 rounded-2xl border border-zinc-200 bg-[#f6f8f5] p-2 shadow-xl shadow-emerald-950/20"
+                      className="absolute left-0 top-full z-50 mt-2 w-56 rounded-2xl border border-zinc-200 bg-[var(--panel)] p-2 shadow-xl shadow-emerald-950/20"
                       onMouseDown={(event) => event.preventDefault()}
                     >
                       {group.links.map((item) => {

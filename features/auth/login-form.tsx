@@ -100,7 +100,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="space-y-6 bg-[#f6f8f5] px-6 py-8 text-zinc-950 md:px-10 md:py-10">
+      <div className="space-y-6 bg-[var(--panel)] px-6 py-8 text-zinc-950 md:px-10 md:py-10">
         <div>
           <h2 className="font-[family-name:var(--font-landing-display)] text-2xl">Sign in</h2>
           <p className="text-sm text-zinc-500">Use the email and password for your shop or super admin account.</p>

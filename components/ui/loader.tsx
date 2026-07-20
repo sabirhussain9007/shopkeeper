@@ -43,7 +43,7 @@ export function Loader({ label, size = "md", className, variant = "center" }: Lo
   if (variant === "overlay") {
     return (
       <div
-        className={cn("absolute inset-0 z-10 flex items-center justify-center bg-[#f6f8f5]/80 backdrop-blur-sm", className)}
+        className={cn("absolute inset-0 z-10 flex items-center justify-center bg-[var(--panel)]/80 backdrop-blur-sm", className)}
         role="status"
         aria-live="polite"
         aria-busy="true"

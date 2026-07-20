@@ -64,7 +64,7 @@ export function ResetPasswordForm() {
           </div>
         </div>
       </div>
-      <div className="space-y-4 bg-[#f6f8f5] px-6 py-8 text-zinc-950 md:px-8">
+      <div className="space-y-4 bg-[var(--panel)] px-6 py-8 text-zinc-950 md:px-8">
         {!token ? (
           <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
             No reset token found.{" "}

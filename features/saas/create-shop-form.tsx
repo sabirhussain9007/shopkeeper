@@ -140,7 +140,7 @@ export function CreateShopForm() {
         </div>
       </div>
 
-      <div className="space-y-8 bg-[#f6f8f5] px-6 py-8 text-zinc-950 md:px-10 md:py-10">
+      <div className="space-y-8 bg-[var(--panel)] px-6 py-8 text-zinc-950 md:px-10 md:py-10">
         <section>
           <div className="mb-4 flex items-end justify-between gap-3">
             <div>

@@ -41,7 +41,7 @@ export default async function ShopStatusPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Shop status</p>
           <h1 className="mt-2 font-[family-name:var(--font-landing-display)] text-3xl text-white">{shop?.name ?? "Your shop"}</h1>
         </div>
-        <div className="space-y-4 bg-[#f6f8f5] p-8 text-zinc-950">
+        <div className="space-y-4 bg-[var(--panel)] p-8 text-zinc-950">
           <p className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
             {status}
           </p>
