@@ -15,6 +15,7 @@ type CrudParams = {
   page?: number;
   limit?: number;
   status?: string;
+  category?: string;
 };
 
 function buildQuery(params: CrudParams) {
@@ -23,6 +24,7 @@ function buildQuery(params: CrudParams) {
   if (params.page) search.set("page", String(params.page));
   if (params.limit) search.set("limit", String(params.limit));
   if (params.status) search.set("status", params.status);
+  if (params.category) search.set("category", params.category);
   const query = search.toString();
   return query ? `?${query}` : "";
 }

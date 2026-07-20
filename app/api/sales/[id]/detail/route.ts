@@ -6,7 +6,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const allowed = await requireApiPermission("pos:write");
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
   const { id } = await params;
-  const data = await getSaleDetail(id);
+  const data = await getSaleDetail(id, allowed.session.user.shopId!);
   if (!data) return NextResponse.json({ error: "Sale not found" }, { status: 404 });
   return NextResponse.json(data);
 }

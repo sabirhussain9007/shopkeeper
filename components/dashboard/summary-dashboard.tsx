@@ -1,16 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { AlertTriangle, Boxes, CreditCard, DollarSign, Download, Package, Printer, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Boxes,
+  CalendarClock,
+  CreditCard,
+  DollarSign,
+  Download,
+  Package,
+  PackageX,
+  Printer,
+  TrendingUp,
+  UserCheck,
+  UserMinus,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Invoice } from "@/components/printing/invoice";
 import { Card, Surface } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { currency } from "@/lib/utils";
+
+type ChartPoint = { label: string; total: number };
 
 type Summary = {
   todaySales: number;
@@ -22,6 +41,34 @@ type Summary = {
   customerCount: number;
   productCount: number;
   lowStockCount: number;
+  employeeCount?: number;
+  presentToday?: number;
+  absentToday?: number;
+  monthlySalary?: number;
+  monthlyExpenses?: number;
+  todayProfit?: number;
+  weeklyProfit?: number;
+  monthlyProfit?: number;
+  yearlyProfit?: number;
+  profitMargin?: number;
+  expenseByCategory?: Array<{ category: string; total: number }>;
+  expenseTrend?: Array<{ label: string; total: number }>;
+  chartSales?: ChartPoint[];
+  chartProfit?: ChartPoint[];
+  chartAttendance?: ChartPoint[];
+  chartSalary?: ChartPoint[];
+  remainingDays?: number;
+  packageExpired?: boolean;
+  packageStatus?: string;
+  expiringPackages?: number;
+  expiredPackages?: number;
+  recentActivity?: Array<{
+    _id: string;
+    action: string;
+    description: string;
+    userName?: string;
+    createdAt?: string;
+  }>;
   lowStock?: Array<{ _id: string; productName: string; quantity: number; reorderLevel: number }>;
   recentSales?: Array<{ _id: string; invoiceNumber: string; paymentMethod: string; grandTotal: number; status: string; createdAt: string }>;
   topProducts?: Array<{ productName: string; quantity: number; revenue: number }>;
@@ -129,33 +176,67 @@ function downloadInvoicePdf(detail: SaleDetail, business: BusinessSettings) {
 export function SummaryDashboard({ summary }: { summary: Summary }) {
   const invoiceRef = useRef<HTMLDivElement>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<SaleDetail | null>(null);
-  const [pendingPrint, setPendingPrint] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ saleId: string; action: "print" | "download" } | null>(null);
+
+  const netProfitValue = summary.monthlyProfit ?? summary.netProfit;
+  const remainingDays = summary.remainingDays;
+  const packageExpired = summary.packageExpired ?? (typeof remainingDays === "number" && remainingDays < 0);
+  const expiringLabel =
+    typeof remainingDays === "number"
+      ? packageExpired
+        ? "Expired"
+        : remainingDays <= 3
+          ? `${remainingDays} day${remainingDays === 1 ? "" : "s"} left`
+          : "No"
+      : "—";
 
   const cards = [
     ["Today's Sales", summary.todaySales, DollarSign],
     ["Monthly Sales", summary.monthlySales, DollarSign],
     ["Gross Profit", summary.grossProfit, Package],
-    ["Net Profit", summary.netProfit, Package],
+    ["Net Profit", netProfitValue, Package],
     ["Outstanding Credit", summary.outstandingCredit, CreditCard],
     ["Customers", summary.customerCount, Users],
     ["Products", summary.productCount, Boxes],
     ["Low Stock", summary.lowStockCount, AlertTriangle],
+    ["Total Employees", summary.employeeCount ?? 0, Users],
+    ["Present Today", summary.presentToday ?? 0, UserCheck],
+    ["Absent Today", summary.absentToday ?? 0, UserMinus],
+    ["Monthly Salary", summary.monthlySalary ?? 0, Wallet],
+    ["Monthly Expenses", summary.monthlyExpenses ?? 0, Wallet],
+    ["Today's Profit", summary.todayProfit ?? 0, TrendingUp],
+    ["Weekly Profit", summary.weeklyProfit ?? 0, TrendingUp],
+    ["Monthly Profit", summary.monthlyProfit ?? netProfitValue, TrendingUp],
+    ["Yearly Profit", summary.yearlyProfit ?? 0, TrendingUp],
+    ["Profit Margin %", summary.profitMargin ?? 0, TrendingUp],
+    ["Expiring Package", expiringLabel, CalendarClock],
+    ["Expired Package", packageExpired ? "Yes" : "No", PackageX],
   ] as const;
 
-  const moneyCardLabels = new Set(["Today's Sales", "Monthly Sales", "Gross Profit", "Net Profit", "Outstanding Credit"]);
+  const moneyCardLabels = new Set([
+    "Today's Sales",
+    "Monthly Sales",
+    "Gross Profit",
+    "Net Profit",
+    "Outstanding Credit",
+    "Monthly Salary",
+    "Monthly Expenses",
+    "Today's Profit",
+    "Weekly Profit",
+    "Monthly Profit",
+    "Yearly Profit",
+  ]);
+  const percentCardLabels = new Set(["Profit Margin %"]);
   const business = summary.settings ?? { businessName: "Shopkeeper" };
+
+  const expenseChartData =
+    (summary.expenseByCategory?.length ? summary.expenseByCategory.map((row) => ({ label: row.category, total: row.total })) : null) ??
+    (summary.expenseTrend?.length ? summary.expenseTrend : null);
 
   const printInvoice = useReactToPrint({
     contentRef: invoiceRef,
     documentTitle: selectedInvoice?.sale.invoiceNumber ?? "invoice",
   });
-
-  useEffect(() => {
-    if (!pendingPrint || !selectedInvoice) return;
-    setPendingPrint(false);
-    printInvoice();
-  }, [pendingPrint, printInvoice, selectedInvoice]);
 
   const loadSaleDetail = async (saleId: string, action: "print" | "download") => {
     setPendingAction({ saleId, action });
@@ -175,8 +256,10 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
   const onPrintInvoice = async (saleId: string) => {
     const detail = await loadSaleDetail(saleId, "print");
     if (!detail) return;
-    setSelectedInvoice(detail);
-    setPendingPrint(true);
+    flushSync(() => {
+      setSelectedInvoice(detail);
+    });
+    printInvoice();
   };
 
   const onDownloadInvoice = async (saleId: string) => {
@@ -194,7 +277,13 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
               <p className="text-sm text-zinc-400">{label}</p>
               <Icon className="h-5 w-5 text-emerald-400" />
             </div>
-            <div className="mt-4 text-2xl font-semibold">{moneyCardLabels.has(label) ? currency(value as number) : value}</div>
+            <div className="mt-4 text-2xl font-semibold">
+              {moneyCardLabels.has(label)
+                ? currency(value as number)
+                : percentCardLabels.has(label)
+                  ? `${Number(value).toFixed(1)}%`
+                  : value}
+            </div>
           </Card>
         ))}
       </div>
@@ -300,6 +389,129 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
               </table>
             </div>
           </Surface>
+
+          {summary.chartSales?.length ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">Sales (6 Months)</h2>
+                <p className="text-sm text-zinc-500">Completed sales totals by month.</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.chartSales}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} />
+                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
+                    <Bar dataKey="total" fill="#34d399" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Surface>
+          ) : null}
+
+          {expenseChartData ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">
+                  {summary.expenseByCategory?.length ? "Expenses by Category" : "Expense Trend"}
+                </h2>
+                <p className="text-sm text-zinc-500">Monthly expense breakdown.</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={expenseChartData}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} />
+                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
+                    <Bar dataKey="total" fill="#60a5fa" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Surface>
+          ) : null}
+
+          {summary.chartProfit?.length ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">Profit (6 Months)</h2>
+                <p className="text-sm text-zinc-500">Net profit by month.</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.chartProfit}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} />
+                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
+                    <Bar dataKey="total" fill="#a78bfa" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Surface>
+          ) : null}
+
+          {summary.chartAttendance?.length ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">Attendance Today</h2>
+                <p className="text-sm text-zinc-500">Present, absent, leave, and late.</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.chartAttendance}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="total" fill="#fbbf24" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Surface>
+          ) : null}
+
+          {summary.chartSalary?.length ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">Salary Status</h2>
+                <p className="text-sm text-zinc-500">Paid vs pending this month.</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.chartSalary}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={48} />
+                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
+                    <Bar dataKey="total" fill="#f472b6" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Surface>
+          ) : null}
+
+          {(summary.recentActivity?.length ?? 0) > 0 ? (
+            <Surface>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold">Recent Activity</h2>
+                <p className="text-sm text-zinc-500">Latest actions across the shop.</p>
+              </div>
+              <ul className="space-y-3">
+                {summary.recentActivity!.map((item) => (
+                  <li key={item._id} className="rounded-xl border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.description || item.action}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          {[item.userName, item.action].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs text-zinc-400">
+                        {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+          ) : null}
         </div>
         <Card>
           <h2 className="text-xl font-semibold">Low Stock Alerts</h2>

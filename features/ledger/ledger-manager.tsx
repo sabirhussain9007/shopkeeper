@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Download, FileDown, MessageCircle, Phone, Plus, Printer, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import { Invoice } from "@/components/printing/invoice";
@@ -160,7 +161,6 @@ export function LedgerManager() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [invoiceToPrint, setInvoiceToPrint] = useState<SaleDetail | null>(null);
   const [invoiceLedgerSummary, setInvoiceLedgerSummary] = useState<InvoiceLedgerSummary | undefined>();
-  const [pendingInvoicePrint, setPendingInvoicePrint] = useState(false);
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null);
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState("");
@@ -215,12 +215,6 @@ export function LedgerManager() {
     documentTitle: invoiceToPrint?.sale.invoiceNumber ?? "invoice",
   });
 
-  useEffect(() => {
-    if (!pendingInvoicePrint || !invoiceToPrint) return;
-    setPendingInvoicePrint(false);
-    printInvoice();
-  }, [invoiceToPrint, pendingInvoicePrint, printInvoice]);
-
   const loadInvoiceDetail = async (saleId: string) => {
     setInvoiceActionId(saleId);
     try {
@@ -266,9 +260,11 @@ export function LedgerManager() {
     if (!entry.sale?._id) return;
     const detail = await loadInvoiceDetail(entry.sale._id);
     if (!detail) return;
-    setInvoiceToPrint(detail);
-    setInvoiceLedgerSummary(ledgerSummaryForEntry(entry, detail));
-    setPendingInvoicePrint(true);
+    flushSync(() => {
+      setInvoiceToPrint(detail);
+      setInvoiceLedgerSummary(ledgerSummaryForEntry(entry, detail));
+    });
+    printInvoice();
   };
 
   const onDownloadInvoice = async (entry: LedgerEntry) => {

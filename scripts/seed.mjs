@@ -1,10 +1,12 @@
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 
+const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
 const rolePermissions = {
+  super_admin: ["shops:manage"],
   admin: ["dashboard:read", "inventory:write", "pos:write", "ledger:write", "reports:read", "settings:write", "users:write"],
   manager: ["dashboard:read", "inventory:write", "pos:write", "ledger:write", "reports:read"],
   cashier: ["pos:write", "reports:read"],
@@ -41,11 +43,17 @@ async function main() {
   const adminEmail = (process.env.DEFAULT_ADMIN_EMAIL ?? "admin@shop.local").toLowerCase();
   const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD ?? "ChangeMe123!";
   const adminName = process.env.DEFAULT_ADMIN_NAME ?? "System Administrator";
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "superadmin@shop.local").toLowerCase();
+  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD ?? "ChangeMe123!";
+  const superAdminName = process.env.SUPER_ADMIN_NAME ?? "Platform Super Admin";
   const resetAdminPassword = process.env.SEED_RESET_ADMIN_PASSWORD === "true";
   const overwriteSettings = process.env.SEED_OVERWRITE_SETTINGS === "true";
 
   if (adminPassword.length < 8) {
     throw new Error("DEFAULT_ADMIN_PASSWORD must be at least 8 characters");
+  }
+  if (superAdminPassword.length < 8) {
+    throw new Error("SUPER_ADMIN_PASSWORD must be at least 8 characters");
   }
 
   await mongoose.connect(uri, { bufferCommands: false, maxPoolSize: 5 });
@@ -53,8 +61,69 @@ async function main() {
   const users = mongoose.connection.collection("users");
   const roles = mongoose.connection.collection("roles");
   const settings = mongoose.connection.collection("settings");
+  const shops = mongoose.connection.collection("shops");
   const now = new Date();
 
+  // Super admin (platform)
+  const existingSuper = await users.findOne({ email: superAdminEmail, deletedAt: { $exists: false } });
+  if (existingSuper) {
+    const update = {
+      $set: {
+        name: existingSuper.name || superAdminName,
+        role: "super_admin",
+        permissions: rolePermissions.super_admin,
+        status: "active",
+        updatedAt: now,
+      },
+      $unset: { shopId: "" },
+    };
+    if (resetAdminPassword) {
+      update.$set.passwordHash = await bcrypt.hash(superAdminPassword, 12);
+    }
+    await users.updateOne({ _id: existingSuper._id }, update);
+    console.log(`Super admin ready: ${superAdminEmail}${resetAdminPassword ? " (password reset)" : ""}`);
+  } else {
+    await users.insertOne({
+      name: superAdminName,
+      email: superAdminEmail,
+      passwordHash: await bcrypt.hash(superAdminPassword, 12),
+      role: "super_admin",
+      permissions: rolePermissions.super_admin,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log(`Super admin created: ${superAdminEmail}`);
+  }
+
+  // Demo shop + shop admin for local development
+  let shop = await shops.findOne({ slug: "demo-shop", deletedAt: { $exists: false } });
+  if (!shop) {
+    const insert = await shops.insertOne({
+      name: process.env.DEFAULT_BUSINESS_NAME ?? "Shopkeeper",
+      slug: "demo-shop",
+      ownerName: adminName,
+      ownerEmail: adminEmail,
+      ownerPhone: "",
+      plan: "monthly",
+      planAmount: 1000,
+      paymentMethod: "bank",
+      paymentReference: "SEED-DEMO",
+      paymentStatus: "approved",
+      status: "active",
+      startsAt: now,
+      expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      approvedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    shop = await shops.findOne({ _id: insert.insertedId });
+    console.log("Demo shop created: demo-shop");
+  } else {
+    console.log("Demo shop already exists");
+  }
+
+  const shopId = shop._id;
   const existingAdmin = await users.findOne({ email: adminEmail, deletedAt: { $exists: false } });
   let adminId = existingAdmin?._id;
 
@@ -65,6 +134,7 @@ async function main() {
         role: "admin",
         permissions: rolePermissions.admin,
         status: "active",
+        shopId,
         updatedAt: now,
       },
     };
@@ -74,7 +144,7 @@ async function main() {
     }
 
     await users.updateOne({ _id: adminId }, update);
-    console.log(`Admin ready: ${adminEmail}${resetAdminPassword ? " (password reset)" : ""}`);
+    console.log(`Shop admin ready: ${adminEmail}${resetAdminPassword ? " (password reset)" : ""}`);
   } else {
     const result = await users.insertOne({
       name: adminName,
@@ -83,11 +153,12 @@ async function main() {
       role: "admin",
       permissions: rolePermissions.admin,
       status: "active",
+      shopId,
       createdAt: now,
       updatedAt: now,
     });
     adminId = result.insertedId;
-    console.log(`Admin created: ${adminEmail}`);
+    console.log(`Shop admin created: ${adminEmail}`);
   }
 
   for (const [name, permissions] of Object.entries(rolePermissions)) {
@@ -97,7 +168,7 @@ async function main() {
         $set: {
           name,
           permissions,
-          description: `${name[0].toUpperCase()}${name.slice(1)} default role`,
+          description: `${name} default role`,
           updatedBy: adminId,
           updatedAt: now,
         },
@@ -109,46 +180,53 @@ async function main() {
       { upsert: true },
     );
   }
-  console.log("Default roles ready: admin, manager, cashier");
+  console.log("Default roles ready: super_admin, admin, manager, cashier");
 
-  const existingSettings = await settings.findOne({ deletedAt: { $exists: false } });
+  const existingSettings = await settings.findOne({ shopId, deletedAt: { $exists: false } });
   if (!existingSettings) {
     await settings.insertOne({
       ...defaultSettings,
+      shopId,
       createdBy: adminId,
       updatedBy: adminId,
       createdAt: now,
       updatedAt: now,
     });
-    console.log("Default settings created");
+    console.log("Demo shop settings created");
   } else if (overwriteSettings) {
     await settings.updateOne(
       { _id: existingSettings._id },
       {
         $set: {
           ...defaultSettings,
+          shopId,
           updatedBy: adminId,
           updatedAt: now,
         },
       },
     );
-    console.log("Default settings overwritten");
+    console.log("Demo shop settings overwritten");
   } else {
-    const missingSettings = Object.fromEntries(Object.entries(defaultSettings).filter(([key]) => existingSettings[key] === undefined));
-    if (Object.keys(missingSettings).length > 0) {
-      await settings.updateOne(
-        { _id: existingSettings._id },
-        {
-          $set: {
-            ...missingSettings,
-            updatedBy: adminId,
-            updatedAt: now,
-          },
-        },
-      );
-      console.log("Default settings backfilled");
-    } else {
-      console.log("Settings already exist");
+    console.log("Demo shop settings already exist");
+  }
+
+  // Attach orphaned records (pre-SaaS data) to the demo shop
+  for (const collectionName of [
+    "products",
+    "categories",
+    "customers",
+    "suppliers",
+    "sales",
+    "saleitems",
+    "purchases",
+    "purchaseitems",
+    "ledgerentries",
+    "stockadjustments",
+  ]) {
+    const col = mongoose.connection.collection(collectionName);
+    const result = await col.updateMany({ shopId: { $exists: false } }, { $set: { shopId } });
+    if (result.modifiedCount > 0) {
+      console.log(`Backfilled shopId on ${result.modifiedCount} ${collectionName}`);
     }
   }
 

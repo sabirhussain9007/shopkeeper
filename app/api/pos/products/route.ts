@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { connectDb } from "@/lib/db";
 import { requireApiPermission } from "@/lib/rbac";
+import { withShopFilter } from "@/lib/tenant";
 import { Product } from "@/models";
 import { paginationSchema } from "@/schemas/domain";
 
@@ -12,11 +13,11 @@ export async function GET(req: NextRequest) {
   const query = Object.fromEntries(req.nextUrl.searchParams.entries());
   const params = paginationSchema.parse(query);
 
-  const filter: Record<string, unknown> = {
+  const filter: Record<string, unknown> = withShopFilter(allowed.session.user.shopId, {
     deletedAt: { $exists: false },
     status: "active",
     quantity: { $gt: 0 },
-  };
+  });
 
   if (params.q) {
     filter.$or = [

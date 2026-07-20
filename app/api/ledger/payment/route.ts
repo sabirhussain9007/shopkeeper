@@ -18,10 +18,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "customerId, amount, and description are required." }, { status: 422 });
   }
 
+  const shopId = allowed.session.user.shopId!;
   const result =
     body.action === "adjustment"
-      ? await recordAdjustment(body.customerId, body.amount, body.direction ?? "decrease", body.description, allowed.session.user.id)
-      : await recordPayment(body.customerId, body.amount, body.description, allowed.session.user.id);
+      ? await recordAdjustment(body.customerId, body.amount, body.direction ?? "decrease", body.description, allowed.session.user.id, shopId)
+      : await recordPayment(body.customerId, body.amount, body.description, allowed.session.user.id, shopId);
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json(result);

@@ -7,6 +7,7 @@ const handlers = crudItemHandlers({
   schema: productSchema,
   permission: "inventory:write",
   searchFields: ["productName","sku","barcode","brand"],
+  activityEntity: "product",
 });
 
 export const GET = handlers.GET;

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
+  Banknote,
   BarChart3,
   Boxes,
   Building2,
+  CalendarCheck2,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -15,45 +17,89 @@ import {
   Menu,
   PackagePlus,
   ReceiptText,
+  ScrollText,
   Settings,
   ShoppingCart,
   Store,
   Users,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { NotificationCenter } from "@/components/saas/notification-center";
+import { SubscriptionExpiryBadge } from "@/components/saas/subscription-expiry";
 import { cn } from "@/lib/utils";
-import type { Permission, Role } from "@/types";
+import type { NavRouteId } from "@/lib/nav-access";
+import type { Role } from "@/types";
 
-const nav: Array<{ label: string; href: string; icon: LucideIcon; permission: Permission }> = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard:read" },
-  { label: "Inventory", href: "/inventory", icon: Boxes, permission: "inventory:write" },
-  { label: "Categories", href: "/categories", icon: ClipboardList, permission: "inventory:write" },
-  { label: "Customers", href: "/customers", icon: Users, permission: "ledger:write" },
-  { label: "Suppliers", href: "/suppliers", icon: Building2, permission: "inventory:write" },
-  { label: "POS", href: "/pos", icon: ShoppingCart, permission: "pos:write" },
-  { label: "Ledger", href: "/ledger", icon: CreditCard, permission: "ledger:write" },
-  { label: "Sales", href: "/sales", icon: ReceiptText, permission: "reports:read" },
-  { label: "Purchases", href: "/purchases", icon: PackagePlus, permission: "inventory:write" },
-  { label: "Reports", href: "/reports", icon: BarChart3, permission: "reports:read" },
-  { label: "Settings", href: "/settings", icon: Settings, permission: "settings:write" },
-];
-
-const rolePermissions: Record<Role, Permission[]> = {
-  admin: ["dashboard:read", "inventory:write", "pos:write", "ledger:write", "reports:read", "settings:write", "users:write"],
-  manager: ["dashboard:read", "inventory:write", "pos:write", "ledger:write", "reports:read"],
-  cashier: ["pos:write", "reports:read"],
+const iconByRoute: Record<NavRouteId, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  inventory: Boxes,
+  categories: ClipboardList,
+  customers: Users,
+  suppliers: Building2,
+  pos: ShoppingCart,
+  ledger: CreditCard,
+  sales: ReceiptText,
+  purchases: PackagePlus,
+  employees: Users,
+  attendance: CalendarCheck2,
+  salaries: Banknote,
+  expenses: Wallet,
+  activity: ScrollText,
+  reports: BarChart3,
+  settings: Settings,
 };
+
+const navMeta: Array<{ id: NavRouteId; label: string; href: string }> = [
+  { id: "dashboard", label: "Dashboard", href: "/dashboard" },
+  { id: "inventory", label: "Inventory", href: "/inventory" },
+  { id: "categories", label: "Categories", href: "/categories" },
+  { id: "customers", label: "Customers", href: "/customers" },
+  { id: "suppliers", label: "Suppliers", href: "/suppliers" },
+  { id: "pos", label: "POS", href: "/pos" },
+  { id: "ledger", label: "Ledger", href: "/ledger" },
+  { id: "sales", label: "Sales", href: "/sales" },
+  { id: "purchases", label: "Purchases", href: "/purchases" },
+  { id: "employees", label: "Employees", href: "/employees" },
+  { id: "attendance", label: "Attendance", href: "/attendance" },
+  { id: "salaries", label: "Salaries", href: "/salaries" },
+  { id: "expenses", label: "Expenses", href: "/expenses" },
+  { id: "activity", label: "Activity Logs", href: "/activity" },
+  { id: "reports", label: "Reports", href: "/reports" },
+  { id: "settings", label: "Settings", href: "/settings" },
+];
 
 const navGroups = [
   { label: "Main", items: ["Dashboard", "POS"] },
   { label: "Inventory", items: ["Inventory", "Categories", "Suppliers", "Purchases"] },
   { label: "Customers", items: ["Customers", "Ledger", "Sales"] },
+  { label: "HR", items: ["Employees", "Attendance", "Salaries"] },
+  { label: "Finance", items: ["Expenses"] },
   { label: "Reports", items: ["Reports"] },
-  { label: "Admin", items: ["Settings"] },
+  { label: "Admin", items: ["Activity Logs", "Settings"] },
 ] as const;
+
+const adminRoutes: NavRouteId[] = [
+  "dashboard",
+  "inventory",
+  "categories",
+  "customers",
+  "suppliers",
+  "pos",
+  "ledger",
+  "sales",
+  "purchases",
+  "employees",
+  "attendance",
+  "salaries",
+  "expenses",
+  "activity",
+  "reports",
+  "settings",
+];
 
 type ResponsiveNavbarProps = {
   role?: Role;
@@ -61,13 +107,38 @@ type ResponsiveNavbarProps = {
   appName?: string;
   appTagline?: string;
   logo?: string;
+  allowedRoutes?: NavRouteId[];
+  remainingDays?: number;
 };
 
-export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagline = "Retail Command", logo }: ResponsiveNavbarProps) {
+export function ResponsiveNavbar({
+  role,
+  email,
+  appName = "Shopkeeper",
+  appTagline = "Retail Command",
+  logo,
+  allowedRoutes,
+  remainingDays,
+}: ResponsiveNavbarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [dropdown, setDropdown] = useState<string | null>(null);
-  const links = role ? nav.filter((item) => rolePermissions[role].includes(item.permission)) : [];
+
+  const routes =
+    role === "admin"
+      ? adminRoutes
+      : allowedRoutes && allowedRoutes.length > 0
+        ? allowedRoutes
+        : role === "cashier"
+          ? (["pos", "sales"] as NavRouteId[])
+          : role === "manager"
+            ? (adminRoutes.filter((id) => id !== "settings" && id !== "activity") as NavRouteId[])
+            : [];
+
+  const links = navMeta
+    .filter((item) => routes.includes(item.id))
+    .map((item) => ({ ...item, icon: iconByRoute[item.id] }));
+
   const groupedLinks = navGroups
     .map((group) => ({
       ...group,
@@ -77,6 +148,19 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAgent: navigator.userAgent }),
+      });
+    } catch {
+      // Proceed with sign-out even if logout logging fails.
+    }
+    await signOut({ callbackUrl: "/login" });
   }
 
   return (
@@ -94,6 +178,10 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
           </Link>
 
           <div className="ml-auto hidden min-w-0 items-center justify-end gap-2 md:flex">
+            {typeof remainingDays === "number" && remainingDays <= 3 ? (
+              <SubscriptionExpiryBadge remainingDays={remainingDays} variant="badge" />
+            ) : null}
+            <NotificationCenter />
             {role ? (
               <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
                 {role}
@@ -101,7 +189,7 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
             ) : null}
             {email ? <span className="hidden max-w-64 truncate text-sm text-zinc-500 dark:text-zinc-400 lg:block">{email}</span> : null}
             {email ? (
-              <Button className="shrink-0 border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900" variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
+              <Button className="shrink-0 border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900" variant="ghost" size="sm" onClick={() => void handleLogout()}>
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
@@ -157,13 +245,13 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
                             href={item.href}
                             onClick={() => setDropdown(null)}
                             className={cn(
-                              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-500",
+                              "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition",
                               isActive(item.href)
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
-                                : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white",
+                                ? "bg-emerald-500 text-zinc-950"
+                                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800",
                             )}
                           >
-                            <Icon className="h-4 w-4 text-emerald-500" />
+                            <Icon className="h-4 w-4" />
                             {item.label}
                           </Link>
                         );
@@ -175,87 +263,46 @@ export function ResponsiveNavbar({ role, email, appName = "Shopkeeper", appTagli
             })}
           </div>
         </nav>
-      </div>
 
-      {open ? (
-        <div className="mx-4 mb-4 rounded-3xl border border-zinc-200 bg-white p-3 shadow-xl shadow-zinc-950/5 dark:border-zinc-800 dark:bg-zinc-900 md:hidden">
-          <div className="mb-3 flex items-center justify-between rounded-2xl bg-zinc-50 px-3 py-2 dark:bg-zinc-950">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{email ?? "Guest"}</p>
-              {role ? <p className="text-xs capitalize text-zinc-500 dark:text-zinc-400">{role} access</p> : null}
+        {open ? (
+          <nav className="space-y-4 border-t border-zinc-200 py-4 dark:border-zinc-800 md:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <NotificationCenter />
+              {typeof remainingDays === "number" && remainingDays <= 3 ? (
+                <SubscriptionExpiryBadge remainingDays={remainingDays} variant="badge" />
+              ) : null}
             </div>
-          </div>
-          <nav className="grid gap-2 sm:grid-cols-2">
-            {links.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition",
-                    isActive(item.href)
-                      ? "bg-zinc-950 text-white dark:bg-emerald-500 dark:text-zinc-950"
-                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          {/* <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            {groupedLinks.map((group) => (
+              <div key={group.label} className="space-y-1">
+                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{group.label}</p>
+                {group.links.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium",
+                        isActive(item.href) ? "bg-emerald-500 text-zinc-950" : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
             {email ? (
-              <Button className="w-full" variant="ghost" onClick={() => signOut({ callbackUrl: "/login" })}>
+              <Button className="w-full" variant="secondary" onClick={() => void handleLogout()}>
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
-            ) : (
-              <Button asChild className="w-full">
-                <Link href="/login" onClick={() => setOpen(false)}>
-                  <LogIn className="h-4 w-4" />
-                  Login
-                </Link>
-              </Button>
-            )}
-          </div> */}
-
-
-
-<div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-  {email ? (
-    <Button
-      className="w-full"
-      variant="ghost"
-      onClick={() =>
-        signOut({
-          callbackUrl: `${window.location.origin}/login`,
-        })
-      }
-    >
-      <LogOut className="h-4 w-4" />
-      Logout
-    </Button>
-  ) : (
-    <Button asChild className="w-full">
-      <Link href="/login" onClick={() => setOpen(false)}>
-        <LogIn className="h-4 w-4" />
-        Login
-      </Link>
-    </Button>
-  )}
-</div>
-
-
-
-
-
-
-
-        </div>
-      ) : null}
+            ) : null}
+          </nav>
+        ) : null}
+      </div>
     </header>
   );
 }

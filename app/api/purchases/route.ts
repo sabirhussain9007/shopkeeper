@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const page = Number(req.nextUrl.searchParams.get("page") ?? 1);
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 20);
-  const data = await listPurchases(page, limit);
+  const data = await listPurchases(page, limit, allowed.session.user.shopId!);
   return NextResponse.json(data);
 }
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors }, { status: 422 });
   }
 
-  const result = await createPurchase(parsed.data, allowed.session.user.id);
+  const result = await createPurchase(parsed.data, allowed.session.user.id, allowed.session.user.shopId!);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json(result.purchase, { status: 201 });
 }

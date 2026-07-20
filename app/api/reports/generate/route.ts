@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const start = req.nextUrl.searchParams.get("start") ? new Date(req.nextUrl.searchParams.get("start")!) : new Date(now.getFullYear(), now.getMonth(), 1);
   const end = req.nextUrl.searchParams.get("end") ? new Date(req.nextUrl.searchParams.get("end")!) : now;
 
-  const report = await generateReport(type, start, end);
+  const report = await generateReport(type, start, end, allowed.session.user.shopId!);
   if (!report) return NextResponse.json({ error: "Invalid report type" }, { status: 400 });
 
   return NextResponse.json({ ...report, range: { start, end } });

@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { getDashboardSummary } from "@/lib/summary";
 
 export default async function DashboardPage() {
-  await requirePermission("dashboard:read");
-  const summary = await getDashboardSummary();
+  const session = await requirePermission("dashboard:read");
+  const summary = await getDashboardSummary(session.user.shopId!);
   return <SummaryDashboard summary={summary} />;
 }

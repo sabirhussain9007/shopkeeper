@@ -6,7 +6,7 @@ import { settingsSchema } from "@/schemas/domain";
 export async function GET() {
   const allowed = await requireApiPermission("settings:write");
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
-  const settings = await getActiveSettings();
+  const settings = await getActiveSettings(allowed.session.user.shopId);
   return NextResponse.json(settings);
 }
 
@@ -19,7 +19,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors }, { status: 422 });
   }
 
-  await upsertSettings(parsed.data, allowed.session.user.id);
-  const settings = await getActiveSettings();
+  const isAdmin = allowed.session.user.role === "admin";
+  await upsertSettings(parsed.data, allowed.session.user.id, allowed.session.user.shopId, {
+    allowRoleAccessEdit: isAdmin,
+  });
+  const settings = await getActiveSettings(allowed.session.user.shopId);
   return NextResponse.json(settings);
 }

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Validation failed", fieldErrors: parsed.error.flatten().fieldErrors }, { status: 422 });
   }
 
-  const result = await processCheckout(parsed.data, allowed.session.user.id);
+  const result = await processCheckout(parsed.data, allowed.session.user.id, allowed.session.user.shopId!);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
   return NextResponse.json({ sale: result.sale }, { status: 201 });

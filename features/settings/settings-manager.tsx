@@ -20,12 +20,13 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { settingsSchema } from "@/schemas/domain";
-import { roles, type Role, type SettingsInput } from "@/types";
+import { DEFAULT_CASHIER_ROUTES, DEFAULT_MANAGER_ROUTES, NAV_ROUTES, type NavRouteId } from "@/lib/nav-access";
+import { shopRoles, type ShopRole, type SettingsInput } from "@/types";
 
 type SettingsRecord = SettingsInput & { _id: string | null };
-type SafeUser = { _id: string; name: string; email: string; role: Role; status: "active" | "inactive" };
+type SafeUser = { _id: string; name: string; email: string; role: ShopRole; status: "active" | "inactive" };
 
-const tabs = ["Business", "Receipt & Tax", "Users", "My Account", "Backup"] as const;
+const tabs = ["Business", "Receipt & Tax", "Access", "Users", "My Account", "Backup"] as const;
 type Tab = (typeof tabs)[number];
 
 const formSchema = settingsSchema;
@@ -35,19 +36,21 @@ const userFormSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8).optional().or(z.literal("")),
-  role: z.enum(roles),
+  role: z.enum(shopRoles),
   status: z.enum(["active", "inactive"]),
 });
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 const emptyUser: UserFormValues = { name: "", email: "", password: "", role: "cashier", status: "active" };
 
-export function SettingsManager() {
+export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopRole }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const logoFileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<Tab>("Business");
+  const isAdmin = currentRole === "admin";
+  const visibleTabs = isAdmin ? tabs : tabs.filter((item) => item !== "Access" && item !== "Users");
   const [userDialog, setUserDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<SafeUser | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<SafeUser | null>(null);
@@ -229,7 +232,7 @@ export function SettingsManager() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        {tabs.map((item) => (
+        {visibleTabs.map((item) => (
           <Button key={item} size="sm" variant={tab === item ? "primary" : "ghost"} onClick={() => setTab(item)}>
             {item}
           </Button>
@@ -393,6 +396,96 @@ export function SettingsManager() {
         </form>
       ) : null}
 
+      {tab === "Access" && isAdmin ? (
+        <Surface className="space-y-5 p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Navbar route access</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Choose which navbar pages managers and cashiers can open. Saving updates their permissions immediately for API and menu access (they may need to refresh the page).
+            </p>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-zinc-100 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
+                <tr>
+                  <th className="px-4 py-3">Route</th>
+                  <th className="px-4 py-3">Path</th>
+                  <th className="px-4 py-3 text-center">Manager</th>
+                  <th className="px-4 py-3 text-center">Cashier</th>
+                </tr>
+              </thead>
+              <tbody>
+                {NAV_ROUTES.map((route) => {
+                  const managerChecked = (preview.managerRoutes ?? []).includes(route.id);
+                  const cashierChecked = (preview.cashierRoutes ?? []).includes(route.id);
+                  return (
+                    <tr key={route.id} className="border-b border-zinc-100 dark:border-zinc-800">
+                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{route.label}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">{route.href}</td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-emerald-600"
+                          checked={managerChecked}
+                          onChange={(event) => {
+                            const current = (form.getValues("managerRoutes") ?? []) as NavRouteId[];
+                            const next = event.target.checked
+                              ? Array.from(new Set([...current, route.id]))
+                              : current.filter((id) => id !== route.id);
+                            form.setValue("managerRoutes", next, { shouldDirty: true });
+                          }}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-emerald-600"
+                          checked={cashierChecked}
+                          onChange={(event) => {
+                            const current = (form.getValues("cashierRoutes") ?? []) as NavRouteId[];
+                            const next = event.target.checked
+                              ? Array.from(new Set([...current, route.id]))
+                              : current.filter((id) => id !== route.id);
+                            form.setValue("cashierRoutes", next, { shouldDirty: true });
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              type="button"
+              onClick={() => {
+                const values = formSchema.parse(form.getValues());
+                saveSettings.mutate(values);
+              }}
+              disabled={saveSettings.isPending}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saveSettings.isPending ? "Saving..." : "Save access"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                form.setValue("managerRoutes", [...DEFAULT_MANAGER_ROUTES], {
+                  shouldDirty: true,
+                });
+                form.setValue("cashierRoutes", [...DEFAULT_CASHIER_ROUTES], { shouldDirty: true });
+              }}
+            >
+              Reset defaults
+            </Button>
+          </div>
+        </Surface>
+      ) : null}
+
       {tab === "Users" ? (
         <Surface className="p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -530,7 +623,7 @@ export function SettingsManager() {
               <div>
                 <Label htmlFor="userRole">Role</Label>
                 <Select id="userRole" {...userForm.register("role")}>
-                  {roles.map((role) => (
+                  {shopRoles.map((role) => (
                     <option key={role} value={role}>
                       {role}
                     </option>

@@ -1,7 +1,8 @@
 import { connectDb } from "@/lib/db";
+import { withShopFilter } from "@/lib/tenant";
 import { Customer, Product, Sale, SaleItem } from "@/models";
 
-type DateRange = { start: Date; end: Date };
+type DateRange = { start: Date; end: Date; shopId: string };
 
 type Timestamped = { createdAt?: Date | string };
 
@@ -9,13 +10,15 @@ function formatDate(doc: Timestamped) {
   return doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "-";
 }
 
-export async function getSalesReport({ start, end }: DateRange) {
+export async function getSalesReport({ start, end, shopId }: DateRange) {
   await connectDb();
-  const sales = await Sale.find({
-    createdAt: { $gte: start, $lte: end },
-    status: "completed",
-    deletedAt: { $exists: false },
-  }).lean();
+  const sales = await Sale.find(
+    withShopFilter(shopId, {
+      createdAt: { $gte: start, $lte: end },
+      status: "completed",
+      deletedAt: { $exists: false },
+    }),
+  ).lean();
 
   return {
     title: "Sales Report",
@@ -31,9 +34,9 @@ export async function getSalesReport({ start, end }: DateRange) {
   };
 }
 
-export async function getInventoryReport() {
+export async function getInventoryReport(shopId: string) {
   await connectDb();
-  const products = await Product.find({ deletedAt: { $exists: false } }).sort({ productName: 1 }).lean();
+  const products = await Product.find(withShopFilter(shopId, { deletedAt: { $exists: false } })).sort({ productName: 1 }).lean();
   const lowStock = products.filter((p) => p.quantity <= p.reorderLevel);
 
   return {
@@ -49,16 +52,18 @@ export async function getInventoryReport() {
   };
 }
 
-export async function getProfitReport({ start, end }: DateRange) {
+export async function getProfitReport({ start, end, shopId }: DateRange) {
   await connectDb();
-  const sales = await Sale.find({
-    createdAt: { $gte: start, $lte: end },
-    status: "completed",
-    deletedAt: { $exists: false },
-  }).lean();
+  const sales = await Sale.find(
+    withShopFilter(shopId, {
+      createdAt: { $gte: start, $lte: end },
+      status: "completed",
+      deletedAt: { $exists: false },
+    }),
+  ).lean();
 
   const saleIds = sales.map((s) => s._id);
-  const items = await SaleItem.find({ sale: { $in: saleIds } }).lean();
+  const items = await SaleItem.find(withShopFilter(shopId, { sale: { $in: saleIds } })).lean();
 
   let revenue = 0;
   let cost = 0;
@@ -78,9 +83,9 @@ export async function getProfitReport({ start, end }: DateRange) {
   };
 }
 
-export async function getCreditReport() {
+export async function getCreditReport(shopId: string) {
   await connectDb();
-  const customers = await Customer.find({ deletedAt: { $exists: false }, currentBalance: { $gt: 0 } })
+  const customers = await Customer.find(withShopFilter(shopId, { deletedAt: { $exists: false }, currentBalance: { $gt: 0 } }))
     .sort({ currentBalance: -1 })
     .lean();
 
@@ -95,13 +100,15 @@ export async function getCreditReport() {
   };
 }
 
-export async function getTaxReport({ start, end }: DateRange) {
+export async function getTaxReport({ start, end, shopId }: DateRange) {
   await connectDb();
-  const sales = await Sale.find({
-    createdAt: { $gte: start, $lte: end },
-    status: "completed",
-    deletedAt: { $exists: false },
-  }).lean();
+  const sales = await Sale.find(
+    withShopFilter(shopId, {
+      createdAt: { $gte: start, $lte: end },
+      status: "completed",
+      deletedAt: { $exists: false },
+    }),
+  ).lean();
 
   const totalTax = sales.reduce((sum, s) => sum + (s.taxTotal ?? 0), 0);
 
@@ -113,18 +120,18 @@ export async function getTaxReport({ start, end }: DateRange) {
   };
 }
 
-export async function generateReport(type: string, start: Date, end: Date) {
+export async function generateReport(type: string, start: Date, end: Date, shopId: string) {
   switch (type) {
     case "sales":
-      return getSalesReport({ start, end });
+      return getSalesReport({ start, end, shopId });
     case "inventory":
-      return getInventoryReport();
+      return getInventoryReport(shopId);
     case "profit":
-      return getProfitReport({ start, end });
+      return getProfitReport({ start, end, shopId });
     case "credit":
-      return getCreditReport();
+      return getCreditReport(shopId);
     case "tax":
-      return getTaxReport({ start, end });
+      return getTaxReport({ start, end, shopId });
     default:
       return null;
   }

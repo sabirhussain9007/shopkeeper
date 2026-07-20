@@ -1,12 +1,14 @@
 import { connectDb } from "@/lib/db";
+import { withShopFilter } from "@/lib/tenant";
 import { Customer, LedgerEntry } from "@/models";
 
-export async function recordPayment(customerId: string, amount: number, description: string, userId: string) {
+export async function recordPayment(customerId: string, amount: number, description: string, userId: string, shopId: string) {
   if (amount <= 0) return { ok: false as const, error: "Payment amount must be positive." };
   await connectDb();
-  const customer = await Customer.findByIdAndUpdate(customerId, { $inc: { currentBalance: -amount } }, { new: true });
+  const customer = await Customer.findOneAndUpdate(withShopFilter(shopId, { _id: customerId }), { $inc: { currentBalance: -amount } }, { new: true });
   if (!customer) return { ok: false as const, error: "Customer not found" };
   await LedgerEntry.create({
+    shopId,
     customer: customerId,
     type: "payment_received",
     debit: 0,
@@ -25,13 +27,15 @@ export async function recordAdjustment(
   direction: "increase" | "decrease",
   description: string,
   userId: string,
+  shopId: string,
 ) {
   if (amount <= 0) return { ok: false as const, error: "Adjustment amount must be positive." };
   await connectDb();
   const delta = direction === "increase" ? amount : -amount;
-  const customer = await Customer.findByIdAndUpdate(customerId, { $inc: { currentBalance: delta } }, { new: true });
+  const customer = await Customer.findOneAndUpdate(withShopFilter(shopId, { _id: customerId }), { $inc: { currentBalance: delta } }, { new: true });
   if (!customer) return { ok: false as const, error: "Customer not found" };
   await LedgerEntry.create({
+    shopId,
     customer: customerId,
     type: "adjustment",
     debit: direction === "increase" ? amount : 0,
@@ -44,14 +48,14 @@ export async function recordAdjustment(
   return { ok: true as const, balance: customer.currentBalance };
 }
 
-export async function getLedgerOverview() {
+export async function getLedgerOverview(shopId: string) {
   await connectDb();
   const [customers, entries] = await Promise.all([
-    Customer.find({ deletedAt: { $exists: false }, status: "active" })
+    Customer.find(withShopFilter(shopId, { deletedAt: { $exists: false }, status: "active" }))
       .sort({ currentBalance: -1 })
       .select("name phone creditLimit currentBalance")
       .lean(),
-    LedgerEntry.find({ deletedAt: { $exists: false } })
+    LedgerEntry.find(withShopFilter(shopId, { deletedAt: { $exists: false } }))
       .sort({ entryDate: -1 })
       .limit(50)
       .populate("customer", "name phone")
@@ -64,11 +68,11 @@ export async function getLedgerOverview() {
   };
 }
 
-export async function getCustomerLedger(customerId: string) {
+export async function getCustomerLedger(customerId: string, shopId: string) {
   await connectDb();
-  const customer = await Customer.findOne({ _id: customerId, deletedAt: { $exists: false } }).lean();
+  const customer = await Customer.findOne(withShopFilter(shopId, { _id: customerId, deletedAt: { $exists: false } })).lean();
   if (!customer) return null;
-  const entries = await LedgerEntry.find({ customer: customerId, deletedAt: { $exists: false } })
+  const entries = await LedgerEntry.find(withShopFilter(shopId, { customer: customerId, deletedAt: { $exists: false } }))
     .sort({ entryDate: -1 })
     .populate("sale", "invoiceNumber status paymentMethod subtotal discountValue taxTotal grandTotal paidAmount")
     .lean();

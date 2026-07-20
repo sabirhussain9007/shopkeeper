@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Model } from "mongoose";
 import type { z } from "zod";
+import { logActivity } from "@/lib/activity";
 import { connectDb } from "@/lib/db";
 import { requireApiPermission } from "@/lib/rbac";
+import { withShopFilter } from "@/lib/tenant";
 import { paginationSchema } from "@/schemas/domain";
 import type { Permission } from "@/types";
 
@@ -11,6 +13,7 @@ type CrudConfig = {
   schema: z.ZodTypeAny;
   permission: Permission;
   searchFields: string[];
+  activityEntity?: string;
 };
 
 export function crudHandlers(config: CrudConfig) {
@@ -19,9 +22,10 @@ export function crudHandlers(config: CrudConfig) {
       const allowed = await requireApiPermission(config.permission);
       if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
       await connectDb();
+      const shopId = allowed.session.user.shopId;
       const query = Object.fromEntries(req.nextUrl.searchParams.entries());
       const params = paginationSchema.parse(query);
-      const filter: Record<string, unknown> = { deletedAt: { $exists: false } };
+      const filter: Record<string, unknown> = withShopFilter(shopId, { deletedAt: { $exists: false } });
       if (params.status) filter.status = params.status;
       if (params.q) {
         filter.$or = config.searchFields.map((field) => ({ [field]: { $regex: params.q, $options: "i" } }));
@@ -39,7 +43,25 @@ export function crudHandlers(config: CrudConfig) {
       await connectDb();
       const payload = config.schema.safeParse(await req.json());
       if (!payload.success) return NextResponse.json({ error: "Validation failed", fieldErrors: payload.error.flatten().fieldErrors }, { status: 422 });
-      const created = await config.model.create({ ...(payload.data as object), createdBy: allowed.session.user.id });
+      const created = await config.model.create({
+        ...(payload.data as object),
+        shopId: allowed.session.user.shopId,
+        createdBy: allowed.session.user.id,
+      });
+      if (config.activityEntity) {
+        await logActivity({
+          shopId: allowed.session.user.shopId,
+          userId: allowed.session.user.id,
+          userName: allowed.session.user.name,
+          userEmail: allowed.session.user.email,
+          userRole: allowed.session.user.role,
+          action: `${config.activityEntity}.created`,
+          entity: config.activityEntity,
+          entityId: String((created as { _id?: unknown })._id ?? ""),
+          description: `Created ${config.activityEntity}`,
+          req,
+        });
+      }
       return NextResponse.json(created, { status: 201 });
     },
   };
@@ -52,7 +74,7 @@ export function crudItemHandlers(config: CrudConfig) {
       if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
       await connectDb();
       const { id } = await params;
-      const item = await config.model.findOne({ _id: id, deletedAt: { $exists: false } }).lean();
+      const item = await config.model.findOne(withShopFilter(allowed.session.user.shopId, { _id: id, deletedAt: { $exists: false } })).lean();
       if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
       return NextResponse.json(item);
     },
@@ -68,17 +90,53 @@ export function crudItemHandlers(config: CrudConfig) {
       const payload = partialSchema.safeParse(body);
       if (!payload.success) return NextResponse.json({ error: "Validation failed", fieldErrors: payload.error.flatten().fieldErrors }, { status: 422 });
       const { id } = await params;
-      const updated = await config.model.findOneAndUpdate({ _id: id, deletedAt: { $exists: false } }, { $set: { ...(payload.data as object), updatedBy: allowed.session.user.id } }, { new: true });
+      const updated = await config.model.findOneAndUpdate(
+        withShopFilter(allowed.session.user.shopId, { _id: id, deletedAt: { $exists: false } }),
+        { $set: { ...(payload.data as object), updatedBy: allowed.session.user.id } },
+        { new: true },
+      );
       if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (config.activityEntity) {
+        await logActivity({
+          shopId: allowed.session.user.shopId,
+          userId: allowed.session.user.id,
+          userName: allowed.session.user.name,
+          userEmail: allowed.session.user.email,
+          userRole: allowed.session.user.role,
+          action: `${config.activityEntity}.updated`,
+          entity: config.activityEntity,
+          entityId: id,
+          description: `Updated ${config.activityEntity}`,
+          req,
+        });
+      }
       return NextResponse.json(updated);
     },
-    async DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    async DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
       const allowed = await requireApiPermission(config.permission);
       if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
       await connectDb();
       const { id } = await params;
-      const deleted = await config.model.findOneAndUpdate({ _id: id, deletedAt: { $exists: false } }, { $set: { deletedAt: new Date(), deletedBy: allowed.session.user.id } }, { new: true });
+      const deleted = await config.model.findOneAndUpdate(
+        withShopFilter(allowed.session.user.shopId, { _id: id, deletedAt: { $exists: false } }),
+        { $set: { deletedAt: new Date(), deletedBy: allowed.session.user.id } },
+        { new: true },
+      );
       if (!deleted) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (config.activityEntity) {
+        await logActivity({
+          shopId: allowed.session.user.shopId,
+          userId: allowed.session.user.id,
+          userName: allowed.session.user.name,
+          userEmail: allowed.session.user.email,
+          userRole: allowed.session.user.role,
+          action: `${config.activityEntity}.deleted`,
+          entity: config.activityEntity,
+          entityId: id,
+          description: `Deleted ${config.activityEntity}`,
+          req,
+        });
+      }
       return NextResponse.json({ ok: true });
     },
   };

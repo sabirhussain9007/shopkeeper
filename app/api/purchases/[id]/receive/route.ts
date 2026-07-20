@@ -6,7 +6,7 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
   const allowed = await requireApiPermission("inventory:write");
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
   const { id } = await params;
-  const result = await receivePurchase(id, allowed.session.user.id);
+  const result = await receivePurchase(id, allowed.session.user.id, allowed.session.user.shopId!);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ purchase: result.purchase });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDb } from "@/lib/db";
 import { requireApiPermission } from "@/lib/rbac";
+import { withShopFilter } from "@/lib/tenant";
 import { Customer } from "@/models";
 
 export async function GET() {
@@ -8,7 +9,7 @@ export async function GET() {
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
 
   await connectDb();
-  const items = await Customer.find({ deletedAt: { $exists: false }, status: "active" })
+  const items = await Customer.find(withShopFilter(allowed.session.user.shopId, { deletedAt: { $exists: false }, status: "active" }))
     .sort({ name: 1 })
     .select("name phone creditLimit currentBalance")
     .lean();

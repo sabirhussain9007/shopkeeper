@@ -6,7 +6,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const allowed = await requireApiPermission("ledger:write");
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
   const { id } = await params;
-  const data = await getCustomerLedger(id);
+  const data = await getCustomerLedger(id, allowed.session.user.shopId!);
   if (!data) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   return NextResponse.json(data);
 }
