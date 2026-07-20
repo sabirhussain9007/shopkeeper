@@ -414,17 +414,17 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
       ) : null}
 
       {tab === "Access" && isAdmin ? (
-        <Surface className="space-y-5 p-6">
+        <Surface className="space-y-5 p-6 text-zinc-950">
           <div>
-            <h2 className="text-lg font-semibold">Navbar route access</h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <h2 className="text-lg font-semibold text-zinc-950">Navbar route access</h2>
+            <p className="text-sm text-zinc-700">
               Choose which navbar pages managers and cashiers can open. Saving updates their permissions immediately for API and menu access (they may need to refresh the page).
             </p>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-500">
+            <table className="min-w-full text-left text-sm text-zinc-950">
+              <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-800">
                 <tr>
                   <th className="px-4 py-3">Route</th>
                   <th className="px-4 py-3">Path</th>
@@ -438,8 +438,8 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                   const cashierChecked = (preview.cashierRoutes ?? []).includes(route.id);
                   return (
                     <tr key={route.id} className="border-b border-zinc-100 hover:bg-emerald-50/60">
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{route.label}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">{route.href}</td>
+                      <td className="px-4 py-3 font-medium text-zinc-950">{route.label}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-800">{route.href}</td>
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
