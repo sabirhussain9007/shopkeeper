@@ -208,16 +208,29 @@ export function ResponsiveNavbar({
             )}
           </div>
 
-          <Button
-            className="ml-auto shrink-0 border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white md:hidden"
-            variant="ghost"
-            size="sm"
-            onClick={() => setOpen((value) => !value)}
-            aria-label="Toggle navigation"
-            aria-expanded={open}
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          <div className="ml-auto flex items-center gap-2 md:hidden">
+            {email ? (
+              <Button
+                className="shrink-0 border border-white/15 bg-white/5 px-2.5 text-emerald-50 hover:bg-white/10 hover:text-white"
+                variant="ghost"
+                size="sm"
+                aria-label="Log out"
+                onClick={() => void handleLogout()}
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            ) : null}
+            <Button
+              className="shrink-0 border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white"
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpen((value) => !value)}
+              aria-label="Toggle navigation"
+              aria-expanded={open}
+            >
+              {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
 
         <nav className="hidden border-t border-white/10 py-2 md:block">
@@ -306,12 +319,6 @@ export function ResponsiveNavbar({
                 })}
               </div>
             ))}
-            {email ? (
-              <Button className="w-full border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10" variant="ghost" onClick={() => void handleLogout()}>
-                <LogOut className="h-4 w-4" />
-                Logout
-              </Button>
-            ) : null}
           </nav>
         ) : null}
       </div>
