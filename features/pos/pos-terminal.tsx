@@ -28,6 +28,7 @@ import { Select } from "@/components/ui/select";
 import { BarcodeScannerDialog } from "@/features/pos/barcode-scanner-dialog";
 import { buildSalePayload, productToCartItem } from "@/features/pos/pos-utils";
 import { usePosCustomers, usePosProducts, usePosSettings } from "@/features/pos/use-pos-data";
+import { BlockLoader } from "@/components/ui/loader";
 import { currency } from "@/lib/utils";
 import { usePosStore } from "@/store/pos-store";
 import type { CartItem } from "@/types";
@@ -284,7 +285,7 @@ export function PosTerminal() {
 
           <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
             {isLoading ? (
-              <p className="p-8 text-center text-zinc-500">Loading products...</p>
+              <BlockLoader label="Loading products..." />
             ) : products.length === 0 ? (
               <p className="p-8 text-center text-zinc-500">No active products in stock. Add inventory first.</p>
             ) : (

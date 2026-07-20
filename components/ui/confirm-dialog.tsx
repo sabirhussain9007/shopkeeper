@@ -29,8 +29,8 @@ export function ConfirmDialog({
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="button" variant="danger" onClick={() => void onConfirm()} disabled={isPending}>
-            {isPending ? "Working..." : confirmLabel}
+          <Button type="button" variant="danger" onClick={() => void onConfirm()} loading={isPending} loadingLabel="Working...">
+            {confirmLabel}
           </Button>
         </div>
       </DialogContent>

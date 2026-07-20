@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NotificationCenter } from "@/components/saas/notification-center";
+import { TableLoader } from "@/components/ui/loader";
 import { cn } from "@/lib/utils";
 
 type ShopRow = {
@@ -189,11 +190,7 @@ export function SuperAdminShops() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
-                  Loading shops...
-                </td>
-              </tr>
+              <TableLoader colSpan={8} label="Loading shops..." />
             ) : shops.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">

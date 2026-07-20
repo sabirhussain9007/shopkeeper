@@ -8,6 +8,7 @@ import { Card, Surface } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { currency, percentage } from "@/lib/utils";
+import { BlockLoader } from "@/components/ui/loader";
 import { exportRowsToPdf } from "@/services/report-export";
 
 const REPORT_TYPES = [
@@ -100,7 +101,7 @@ export function ReportsManager() {
         ) : null}
 
         {report.isLoading ? (
-          <p className="py-12 text-center text-zinc-500">Generating report...</p>
+          <BlockLoader label="Generating report..." />
         ) : report.isError ? (
           <p className="py-12 text-center text-red-500">Unable to load report.</p>
         ) : (

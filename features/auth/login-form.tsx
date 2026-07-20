@@ -119,8 +119,8 @@ export function LoginForm() {
             </label>
             <Input id="password" name="password" type="password" placeholder="••••••••" required autoComplete="current-password" className="bg-white" />
           </div>
-          <Button className="mt-2 w-full" type="submit" disabled={isPending}>
-            {isPending ? "Signing in..." : "Sign in"}
+          <Button className="mt-2 w-full" type="submit" loading={isPending} loadingLabel="Signing in...">
+            Sign in
           </Button>
           <div className="flex justify-between text-sm text-zinc-500">
             <Link href="/forgot-password" className="hover:text-emerald-700">

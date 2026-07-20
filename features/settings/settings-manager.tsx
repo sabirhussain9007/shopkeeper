@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { BlockLoader } from "@/components/ui/loader";
 import { Receipt } from "@/components/printing/receipt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -229,6 +230,10 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
   const preview = useWatch({ control: form.control });
   const receiptSize = (preview.receiptSize ?? "80mm") as "58mm" | "80mm" | "a4";
 
+  if (settingsQuery.isLoading) {
+    return <BlockLoader label="Loading settings..." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
@@ -359,9 +364,9 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                 </div>
               </>
             )}
-            <Button type="submit" disabled={settingsQuery.isLoading || saveSettings.isPending}>
-              <Save className="mr-2 h-4 w-4" />
-              {saveSettings.isPending ? "Saving..." : "Save settings"}
+            <Button type="submit" loading={saveSettings.isPending} loadingLabel="Saving...">
+              <Save className="h-4 w-4" />
+              Save settings
             </Button>
           </Surface>
 
@@ -465,10 +470,11 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                 const values = formSchema.parse(form.getValues());
                 saveSettings.mutate(values);
               }}
-              disabled={saveSettings.isPending}
+              loading={saveSettings.isPending}
+              loadingLabel="Saving..."
             >
-              <Save className="mr-2 h-4 w-4" />
-              {saveSettings.isPending ? "Saving..." : "Save access"}
+              <Save className="h-4 w-4" />
+              Save access
             </Button>
             <Button
               type="button"
@@ -638,8 +644,8 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                 </Select>
               </div>
             </div>
-            <Button type="submit" disabled={saveUser.isPending}>
-              {saveUser.isPending ? "Saving..." : "Save user"}
+            <Button type="submit" loading={saveUser.isPending} loadingLabel="Saving...">
+              Save user
             </Button>
           </form>
         </DialogContent>

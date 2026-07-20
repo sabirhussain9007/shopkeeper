@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, BadgeCheck, Building2, Clock, Receipt, ShieldCheck, Smartphone, Store, Wallet } from "lucide-react";
+import { Loader } from "@/components/ui/loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SHOP_PLANS, type ShopPaymentMethod, type ShopPlanId } from "@/lib/saas";
@@ -286,7 +287,7 @@ export function CreateShopForm() {
                   </p>
                 </div>
               )}
-              {!accounts && <p className="text-emerald-100/60">Loading payment account…</p>}
+              {!accounts && <Loader label="Loading payment account…" variant="inline" className="text-emerald-100/60" />}
             </div>
           </div>
 
@@ -300,8 +301,8 @@ export function CreateShopForm() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-6">
           <p className="text-sm text-zinc-500">Already registered? <Link href="/login" className="font-medium text-emerald-700 hover:underline">Login</Link></p>
-          <Button type="submit" disabled={isPending} className="min-w-44">
-            {isPending ? "Submitting..." : "Submit for approval"}
+          <Button type="submit" loading={isPending} loadingLabel="Submitting..." className="min-w-44">
+            Submit for approval
           </Button>
         </div>
       </div>

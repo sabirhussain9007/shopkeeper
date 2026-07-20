@@ -67,8 +67,8 @@ export function ResetPasswordForm() {
         ) : null}
         <Input name="password" type="password" placeholder="New password" required minLength={8} autoComplete="new-password" />
         <Input name="confirm" type="password" placeholder="Confirm password" required minLength={8} autoComplete="new-password" />
-        <Button className="w-full" type="submit" disabled={isPending || !token}>
-          {isPending ? "Updating..." : "Reset password"}
+        <Button className="w-full" type="submit" disabled={!token} loading={isPending} loadingLabel="Updating...">
+          Reset password
         </Button>
         <p className="text-center text-sm text-zinc-500">
           <Link className="font-medium text-emerald-700 dark:text-emerald-400" href="/login">

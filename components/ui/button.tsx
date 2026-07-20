@@ -1,15 +1,28 @@
 import { Slot } from "@radix-ui/react-slot";
 import { type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Spinner } from "@/components/ui/loader";
 import { cn } from "@/lib/utils";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   asChild?: boolean;
   variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
+  loading?: boolean;
+  loadingLabel?: string;
   children: ReactNode;
 };
 
-export function Button({ asChild, className, variant = "primary", size = "md", ...props }: ButtonProps) {
+export function Button({
+  asChild,
+  className,
+  variant = "primary",
+  size = "md",
+  loading,
+  loadingLabel,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
@@ -24,7 +37,18 @@ export function Button({ asChild, className, variant = "primary", size = "md", .
         size === "lg" && "h-14 px-6 text-lg",
         className,
       )}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading ? (
+        <>
+          <Spinner size="sm" className="text-current" />
+          {loadingLabel ?? children}
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
   );
 }

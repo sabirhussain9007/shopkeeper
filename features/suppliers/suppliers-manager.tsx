@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -123,7 +124,7 @@ export function SuppliersManager() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-zinc-500">Loading suppliers...</td></tr>
+                <TableLoader colSpan={5} label="Loading suppliers..." />
               ) : items.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-zinc-500">No suppliers found.</td></tr>
               ) : (

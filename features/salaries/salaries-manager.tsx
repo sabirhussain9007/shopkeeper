@@ -9,6 +9,7 @@ import jsPDF from "jspdf";
 import { toast } from "sonner";
 import { z } from "zod";
 import { PaginationBar } from "@/components/crud/data-toolbar";
+import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
@@ -410,11 +411,7 @@ export function SalariesManager() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
-                    Loading salaries...
-                  </td>
-                </tr>
+                <TableLoader colSpan={6} label="Loading salaries..." />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
@@ -544,8 +541,8 @@ export function SalariesManager() {
               <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={save.isPending}>
-                {save.isPending ? "Saving..." : editing ? "Update" : "Create"}
+              <Button type="submit" loading={save.isPending} loadingLabel="Saving...">
+                {editing ? "Update" : "Create"}
               </Button>
             </div>
           </form>
@@ -575,8 +572,8 @@ export function SalariesManager() {
               <Button type="button" variant="ghost" onClick={() => setGenerateOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => void onGenerate()} disabled={generate.isPending}>
-                {generate.isPending ? "Generating..." : "Generate"}
+              <Button onClick={() => void onGenerate()} loading={generate.isPending} loadingLabel="Generating...">
+                Generate
               </Button>
             </div>
           </div>

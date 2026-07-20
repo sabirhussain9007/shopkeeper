@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PaginationBar } from "@/components/crud/data-toolbar";
+import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -189,11 +190,7 @@ export function ActivityLogs() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-zinc-500">
-                    Loading activity...
-                  </td>
-                </tr>
+                <TableLoader colSpan={10} label="Loading activity..." />
               ) : list.isError ? (
                 <tr>
                   <td colSpan={10} className="px-4 py-12 text-center text-zinc-500">

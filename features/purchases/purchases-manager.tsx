@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { PaginationBar } from "@/components/crud/data-toolbar";
+import { BlockLoader, TableLoader } from "@/components/ui/loader";
 import { useCrud } from "@/hooks/use-crud";
 import { currency } from "@/lib/utils";
 import type { ProductInput, SupplierInput } from "@/types";
@@ -171,7 +172,7 @@ export function PurchasesManager() {
             </thead>
             <tbody>
               {purchases.isLoading ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-zinc-500">Loading purchases...</td></tr>
+                <TableLoader colSpan={6} label="Loading purchases..." />
               ) : (purchases.data?.items ?? []).length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-zinc-500">No purchase orders yet.</td></tr>
               ) : (
@@ -273,7 +274,7 @@ export function PurchasesManager() {
                 </div>
               ))}
             </div>
-          ) : <p className="text-zinc-500">Loading...</p>}
+          ) : <BlockLoader label="Loading..." />}
         </DialogContent>
       </Dialog>
       <ConfirmDialog

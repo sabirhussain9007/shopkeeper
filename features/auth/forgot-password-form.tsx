@@ -44,8 +44,8 @@ export function ForgotPasswordForm() {
       </div>
       <div className="space-y-4">
         <Input name="email" type="email" placeholder="Email address" required autoComplete="email" />
-        <Button className="w-full" type="submit" disabled={isPending}>
-          {isPending ? "Sending..." : "Send reset link"}
+        <Button className="w-full" type="submit" loading={isPending} loadingLabel="Sending...">
+          Send reset link
         </Button>
         {devToken ? (
           <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">

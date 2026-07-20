@@ -7,6 +7,7 @@ import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
 import { Invoice } from "@/components/printing/invoice";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { BlockLoader, TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, Surface } from "@/components/ui/card";
@@ -148,11 +149,7 @@ export function SalesManager() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
-                    Loading sales...
-                  </td>
-                </tr>
+                <TableLoader colSpan={6} label="Loading sales..." />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
@@ -192,7 +189,7 @@ export function SalesManager() {
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent title="Invoice Details" description={detail?.sale.invoiceNumber} className="max-w-3xl">
           {saleDetail.isLoading ? (
-            <p className="text-zinc-500">Loading invoice...</p>
+            <BlockLoader label="Loading invoice..." />
           ) : detail ? (
             <div className="space-y-4">
               <div className="grid gap-3 text-sm md:grid-cols-2">

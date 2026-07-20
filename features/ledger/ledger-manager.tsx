@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { BlockLoader, Spinner, TableLoader } from "@/components/ui/loader";
 import { currency } from "@/lib/utils";
 
 type Customer = { _id: string; name: string; phone: string; creditLimit: number; currentBalance?: number };
@@ -345,7 +346,10 @@ export function LedgerManager() {
             <Input className="pl-9" placeholder="Search customers" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="max-h-[32rem] space-y-2 overflow-y-auto">
-            {customers.map((customer) => (
+            {overview.isLoading ? (
+              <BlockLoader label="Loading customers..." />
+            ) : (
+              customers.map((customer) => (
               <button
                 key={customer._id}
                 type="button"
@@ -363,7 +367,8 @@ export function LedgerManager() {
                   </div>
                 </div>
               </button>
-            ))}
+              ))
+            )}
           </div>
         </Surface>
 
@@ -418,7 +423,10 @@ export function LedgerManager() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(customerLedger.data?.entries ?? []).map((entry) => (
+                    {customerLedger.isLoading ? (
+                      <TableLoader colSpan={10} label="Loading ledger entries..." />
+                    ) : (
+                      (customerLedger.data?.entries ?? []).map((entry) => (
                       <tr key={entry._id} className="border-t border-zinc-100 dark:border-zinc-800">
                         <td className="px-4 py-3">{new Date(entry.entryDate).toLocaleDateString()}</td>
                         <td className="px-4 py-3">
@@ -444,7 +452,7 @@ export function LedgerManager() {
                                 disabled={invoiceActionId === entry.sale._id}
                                 onClick={() => void onPrintInvoice(entry)}
                               >
-                                <Printer className="h-4 w-4" />
+                                {invoiceActionId === entry.sale._id ? <Spinner size="sm" className="text-current" /> : <Printer className="h-4 w-4" />}
                               </Button>
                               <Button
                                 aria-label={`Download invoice ${entry.sale.invoiceNumber ?? ""}`}
@@ -454,13 +462,14 @@ export function LedgerManager() {
                                 disabled={invoiceActionId === entry.sale._id}
                                 onClick={() => void onDownloadInvoice(entry)}
                               >
-                                <Download className="h-4 w-4" />
+                                {invoiceActionId === entry.sale._id ? <Spinner size="sm" className="text-current" /> : <Download className="h-4 w-4" />}
                               </Button>
                             </div>
                           ) : null}
                         </td>
                       </tr>
-                    ))}
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -103,8 +103,8 @@ export function SignupForm({ canSignup, businessName }: { canSignup: boolean; bu
         <Input name="email" type="email" placeholder="Email address" required autoComplete="email" />
         <Input name="password" type="password" placeholder="Password" required minLength={8} autoComplete="new-password" />
         <Input name="confirmPassword" type="password" placeholder="Confirm password" required minLength={8} autoComplete="new-password" />
-        <Button className="w-full" type="submit" disabled={isPending}>
-          {isPending ? "Creating account..." : "Sign up"}
+        <Button className="w-full" type="submit" loading={isPending} loadingLabel="Creating account...">
+          Sign up
         </Button>
         <p className="text-center text-sm text-zinc-500">
           Already have an account?{" "}

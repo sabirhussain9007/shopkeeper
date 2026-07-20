@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { adjustStock } from "@/actions/products";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -237,11 +238,7 @@ export function InventoryManager() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
-                    Loading products...
-                  </td>
-                </tr>
+                <TableLoader colSpan={8} label="Loading products..." />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">

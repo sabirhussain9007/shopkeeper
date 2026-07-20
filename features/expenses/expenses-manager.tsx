@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
@@ -261,11 +262,7 @@ export function ExpensesManager() {
             </thead>
             <tbody>
               {list.isLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">
-                    Loading expenses...
-                  </td>
-                </tr>
+                <TableLoader colSpan={7} label="Loading expenses..." />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">

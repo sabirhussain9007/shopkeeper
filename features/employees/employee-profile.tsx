@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
+import { BlockLoader } from "@/components/ui/loader";
 import { currency } from "@/lib/utils";
 import type { EmployeeInput } from "@/types";
 
@@ -48,7 +49,7 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
   if (profile.isLoading) {
     return (
       <Surface>
-        <p className="py-12 text-center text-zinc-500">Loading employee profile...</p>
+        <BlockLoader label="Loading employee profile..." />
       </Surface>
     );
   }
