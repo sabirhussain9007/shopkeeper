@@ -32,7 +32,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const planLabel = shop?.plan ? SHOP_PLANS[shop.plan as ShopPlanId]?.label : undefined;
 
   return (
-    <div className="relative min-h-screen text-zinc-950">
+    <div className="relative isolate min-h-screen overflow-x-hidden text-zinc-950">
       <PageBackground />
       <ResponsiveNavbar
         role={role}
@@ -43,8 +43,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         allowedRoutes={allowedRoutes}
         remainingDays={remainingDays}
       />
-      <main className="relative mx-auto min-w-0 max-w-7xl p-4 md:p-8">
-        <AppPanel className="p-4 md:p-8">
+      <main className="relative z-0 mx-auto w-full min-w-0 max-w-7xl px-3 py-4 sm:px-4 md:p-8">
+        <AppPanel className="w-full min-w-0 overflow-hidden p-4 sm:p-6 md:p-8">
           {remainingDays <= 3 ? (
             <SubscriptionExpiryBadge
               remainingDays={remainingDays}

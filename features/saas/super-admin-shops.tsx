@@ -176,7 +176,7 @@ export function SuperAdminShops() {
 
       <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
         <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-zinc-100 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+          <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-4 py-3">Shop Name</th>
               <th className="px-4 py-3">Owner</th>

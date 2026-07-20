@@ -33,7 +33,7 @@ export function AppPanel({ className, ...props }: HTMLAttributes<HTMLDivElement>
   return (
     <div
       className={cn(
-        "rounded-[2rem] border border-zinc-200/90 bg-[var(--panel)] text-zinc-950 shadow-2xl shadow-emerald-950/25",
+        "w-full min-w-0 rounded-2xl border border-zinc-200/90 bg-[#f0fdf4] text-zinc-950 shadow-lg shadow-emerald-950/10 sm:rounded-[2rem] sm:shadow-2xl sm:shadow-emerald-950/25",
         className,
       )}
       {...props}

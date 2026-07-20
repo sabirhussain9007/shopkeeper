@@ -172,9 +172,9 @@ export function ActivityLogs() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="w-full min-w-[1100px] text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-3 py-3 font-medium">Timestamp</th>
                 <th className="px-3 py-3 font-medium">User</th>
@@ -205,7 +205,7 @@ export function ActivityLogs() {
                 </tr>
               ) : (
                 items.map((item) => (
-                  <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-3 py-3 whitespace-nowrap text-zinc-500">
                       {item.createdAt ? new Date(item.createdAt).toLocaleString() : "—"}
                     </td>

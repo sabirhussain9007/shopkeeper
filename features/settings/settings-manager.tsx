@@ -384,7 +384,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
 
           <Surface className={`p-6 ${receiptSize === "a4" ? "lg:col-span-2" : ""}`}>
             <h3 className="mb-4 text-sm font-medium uppercase tracking-wide text-zinc-500">Receipt preview</h3>
-            <div className="flex justify-center overflow-auto rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex justify-center overflow-auto rounded-xl border border-zinc-200 bg-white p-4">
               <Receipt
                 items={[
                   { productId: "1", name: "Sample Item", sku: "SKU-001", quantity: 2, unitPrice: 500, purchasePrice: 350, taxRate: Number(preview.taxRate) || 0, discount: 0, stockAvailable: 10 },
@@ -422,9 +422,9 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             </p>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-zinc-100 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
+              <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-500">
                 <tr>
                   <th className="px-4 py-3">Route</th>
                   <th className="px-4 py-3">Path</th>
@@ -437,7 +437,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                   const managerChecked = (preview.managerRoutes ?? []).includes(route.id);
                   const cashierChecked = (preview.cashierRoutes ?? []).includes(route.id);
                   return (
-                    <tr key={route.id} className="border-b border-zinc-100 dark:border-zinc-800">
+                    <tr key={route.id} className="border-b border-zinc-100 hover:bg-emerald-50/60">
                       <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{route.label}</td>
                       <td className="px-4 py-3 font-mono text-xs text-zinc-500">{route.href}</td>
                       <td className="px-4 py-3 text-center">
@@ -520,9 +520,9 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             </Button>
           </div>
           <DataToolbar placeholder="Search users..." onSearch={setUserSearch} />
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
             <table className="min-w-full text-sm">
-              <thead className="bg-zinc-50 text-left dark:bg-zinc-900">
+              <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Email</th>
@@ -533,7 +533,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
               </thead>
               <tbody>
                 {(usersQuery.data?.items ?? []).map((user) => (
-                  <tr key={user._id} className="border-t border-zinc-200 dark:border-zinc-800">
+                  <tr key={user._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 font-medium">{user.name}</td>
                     <td className="px-4 py-3">{user.email}</td>
                     <td className="px-4 py-3 capitalize">{user.role}</td>

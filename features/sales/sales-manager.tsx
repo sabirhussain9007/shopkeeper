@@ -135,9 +135,9 @@ export function SalesManager() {
 
       <Surface>
         <DataToolbar placeholder="Search by invoice number" onSearch={onSearch} />
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="bg-zinc-100 dark:bg-zinc-900">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
                 <th className="px-4 py-3">Date</th>
@@ -158,7 +158,7 @@ export function SalesManager() {
                 </tr>
               ) : (
                 items.map((sale) => (
-                  <tr key={sale._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={sale._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 font-medium">{sale.invoiceNumber}</td>
                     <td className="px-4 py-3 text-zinc-500">{sale.createdAt ? new Date(sale.createdAt).toLocaleString() : "—"}</td>
                     <td className="px-4 py-3 capitalize">{sale.paymentMethod}</td>
@@ -200,9 +200,9 @@ export function SalesManager() {
                 <div>Paid: {currency(detail.sale.paidAmount ?? 0)}</div>
                 <div>Change: {currency(detail.sale.changeDue ?? 0)}</div>
               </div>
-              <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
                 <table className="w-full text-sm">
-                  <thead className="bg-zinc-100 dark:bg-zinc-900">
+                  <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                     <tr>
                       <th className="px-4 py-2 text-left">Item</th>
                       <th className="px-4 py-2 text-right">Qty</th>
@@ -212,7 +212,7 @@ export function SalesManager() {
                   </thead>
                   <tbody>
                     {detail.items.map((item) => (
-                      <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         <td className="px-4 py-2">{item.name}</td>
                         <td className="px-4 py-2 text-right">{item.quantity}</td>
                         <td className="px-4 py-2 text-right">{currency(item.unitPrice)}</td>

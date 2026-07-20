@@ -20,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${landingDisplay.variable} ${landingSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-[family-name:var(--font-landing-sans)]" style={{ zIndex: 0 }} suppressHydrationWarning>
+      <body className="min-h-full overflow-x-hidden font-[family-name:var(--font-landing-sans)]" suppressHydrationWarning>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

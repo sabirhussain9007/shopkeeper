@@ -115,9 +115,9 @@ export function ReportsManager() {
               ))}
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
               <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-100 dark:bg-zinc-900">
+                <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                   <tr>
                     {report.data?.headers.map((header) => (
                       <th key={header} className="px-4 py-3 font-medium">{header}</th>
@@ -129,7 +129,7 @@ export function ReportsManager() {
                     <tr><td colSpan={report.data?.headers.length ?? 1} className="px-4 py-12 text-center text-zinc-500">No data for this period.</td></tr>
                   ) : (
                     report.data!.rows.map((row, index) => (
-                      <tr key={index} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <tr key={index} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         {row.map((cell, cellIndex) => {
                           const header = report.data?.headers[cellIndex] ?? "";
                           const isMoney = ["Total", "Cost", "Price", "Balance", "Credit Limit", "Subtotal", "Tax", "Sold At", "Profit"].includes(header);

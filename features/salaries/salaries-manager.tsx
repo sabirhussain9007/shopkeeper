@@ -397,9 +397,9 @@ export function SalariesManager() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Employee</th>
                 <th className="px-4 py-3 font-medium">Period</th>
@@ -422,7 +422,7 @@ export function SalariesManager() {
                 items.map((item) => {
                   const net = item.netSalary ?? computeNet(item);
                   return (
-                    <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                       <td className="px-4 py-3 font-medium">{employeeName(item)}</td>
                       <td className="px-4 py-3">{monthLabel(item.month, item.year)}</td>
                       <td className="px-4 py-3">{currency(item.basicSalary)}</td>
@@ -533,7 +533,7 @@ export function SalariesManager() {
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" className="mt-1.5" {...form.register("notes")} />
             </div>
-            <Surface className="bg-zinc-50 dark:bg-zinc-900">
+            <Surface className="bg-[var(--panel)]">
               <p className="text-sm text-zinc-500">Computed net salary</p>
               <p className="mt-1 text-2xl font-semibold">{currency(netPreview)}</p>
             </Surface>

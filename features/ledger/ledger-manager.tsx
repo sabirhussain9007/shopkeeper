@@ -406,9 +406,9 @@ export function LedgerManager() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
                 <table className="w-full min-w-[1050px] text-left text-sm">
-                  <thead className="bg-zinc-100 dark:bg-zinc-900">
+                  <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                     <tr>
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3">Type</th>
@@ -427,7 +427,7 @@ export function LedgerManager() {
                       <TableLoader colSpan={10} label="Loading ledger entries..." />
                     ) : (
                       (customerLedger.data?.entries ?? []).map((entry) => (
-                      <tr key={entry._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <tr key={entry._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         <td className="px-4 py-3">{new Date(entry.entryDate).toLocaleDateString()}</td>
                         <td className="px-4 py-3">
                           <Badge variant={entry.type === "payment_received" ? "success" : entry.type === "credit_sale" ? "warning" : "default"}>

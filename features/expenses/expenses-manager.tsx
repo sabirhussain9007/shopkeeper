@@ -191,9 +191,9 @@ export function ExpensesManager() {
       {(d?.byCategory?.length ?? 0) > 0 ? (
         <Surface>
           <h3 className="mb-4 text-lg font-semibold">By Category (This Month)</h3>
-          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
             <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+              <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 text-right font-medium">Total</th>
@@ -201,7 +201,7 @@ export function ExpensesManager() {
               </thead>
               <tbody>
                 {d!.byCategory.map((row) => (
-                  <tr key={row.category} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={row.category} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 capitalize">{row.category.replaceAll("_", " ")}</td>
                     <td className="px-4 py-3 text-right font-medium">{currency(row.total)}</td>
                   </tr>
@@ -247,9 +247,9 @@ export function ExpensesManager() {
             ))}
           </Select>
         </div>
-        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Category</th>
@@ -271,7 +271,7 @@ export function ExpensesManager() {
                 </tr>
               ) : (
                 items.map((item) => (
-                  <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 font-medium">{item.title}</td>
                     <td className="px-4 py-3 capitalize">{item.category.replaceAll("_", " ")}</td>
                     <td className="px-4 py-3">{currency(item.amount)}</td>

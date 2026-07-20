@@ -222,9 +222,9 @@ export function InventoryManager() {
             </Button>
           }
         />
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Product</th>
                 <th className="px-4 py-3 font-medium">SKU</th>
@@ -250,7 +250,7 @@ export function InventoryManager() {
                   const { profit: lineProfit, margin } = profitInfo(item.purchasePrice, item.sellingPrice);
                   const lowStock = item.quantity <= item.reorderLevel;
                   return (
-                    <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                       <td className="px-4 py-3">
                         <div className="font-medium">{item.productName}</div>
                         {lowStock ? (

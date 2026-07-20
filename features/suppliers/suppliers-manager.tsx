@@ -114,9 +114,9 @@ export function SuppliersManager() {
 
       <Surface>
         <DataToolbar placeholder="Search suppliers" status={params.status} onSearch={onSearch} onStatusChange={onStatusChange} />
-        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-100 dark:bg-zinc-900">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3">Supplier</th>
                 <th className="px-4 py-3">Contact</th>
@@ -132,7 +132,7 @@ export function SuppliersManager() {
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-zinc-500">No suppliers found.</td></tr>
               ) : (
                 items.map((item) => (
-                  <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 font-medium">{item.supplierName}</td>
                     <td className="px-4 py-3 text-zinc-500">{item.contactPerson || "—"}</td>
                     <td className="px-4 py-3">{item.phone}</td>

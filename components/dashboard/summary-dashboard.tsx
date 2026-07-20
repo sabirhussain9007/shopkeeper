@@ -269,34 +269,34 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="min-w-0 space-y-6">
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(([label, value, Icon]) => (
-          <Card key={label}>
+          <Surface key={label}>
             <div className="flex items-center justify-between">
-              <p className="text-sm text-emerald-50/60">{label}</p>
-              <Icon className="h-5 w-5 text-emerald-400" />
+              <p className="text-sm text-zinc-500">{label}</p>
+              <Icon className="h-5 w-5 text-emerald-600" />
             </div>
-            <div className="mt-4 text-2xl font-semibold">
+            <div className="mt-4 text-2xl font-semibold text-zinc-950">
               {moneyCardLabels.has(label)
                 ? currency(value as number)
                 : percentCardLabels.has(label)
                   ? `${Number(value).toFixed(1)}%`
                   : value}
             </div>
-          </Card>
+          </Surface>
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-        <div className="space-y-6">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[2fr_1fr]">
+        <div className="min-w-0 space-y-6">
           <Surface>
             <div className="mb-4">
               <h2 className="text-xl font-semibold">Recent Sales</h2>
               <p className="text-sm text-zinc-500">Latest invoices recorded in the system.</p>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
               <table className="min-w-full text-sm">
-                <thead className="bg-zinc-100 text-left dark:bg-zinc-900">
+                <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                   <tr>
                     <th className="px-4 py-3">Invoice</th>
                     <th className="px-4 py-3">Date</th>
@@ -315,7 +315,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                     </tr>
                   ) : (
                     summary.recentSales!.map((sale) => (
-                      <tr key={sale._id} className="border-t border-zinc-200 dark:border-zinc-800">
+                      <tr key={sale._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         <td className="px-4 py-3 font-medium">{sale.invoiceNumber}</td>
                         <td className="px-4 py-3 text-zinc-500">{sale.createdAt ? new Date(sale.createdAt).toLocaleDateString() : "-"}</td>
                         <td className="px-4 py-3 capitalize">{sale.paymentMethod}</td>
@@ -360,9 +360,9 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
               <h2 className="text-xl font-semibold">Top Products</h2>
               <p className="text-sm text-zinc-500">Best sellers by revenue.</p>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
               <table className="min-w-full text-sm">
-                <thead className="bg-zinc-100 text-left dark:bg-zinc-900">
+                <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                   <tr>
                     <th className="px-4 py-3">Product</th>
                     <th className="px-4 py-3 text-right">Qty Sold</th>
@@ -378,7 +378,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                     </tr>
                   ) : (
                     summary.topProducts!.map((item) => (
-                      <tr key={item.productName} className="border-t border-zinc-200 dark:border-zinc-800">
+                      <tr key={item.productName} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         <td className="px-4 py-3 font-medium">{item.productName}</td>
                         <td className="px-4 py-3 text-right">{item.quantity}</td>
                         <td className="px-4 py-3 text-right font-medium">{currency(item.revenue)}</td>
@@ -396,7 +396,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                 <h2 className="text-xl font-semibold">Sales (6 Months)</h2>
                 <p className="text-sm text-zinc-500">Completed sales totals by month.</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="h-64 min-w-0 w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={summary.chartSales}>
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -417,7 +417,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                 </h2>
                 <p className="text-sm text-zinc-500">Monthly expense breakdown.</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="h-64 min-w-0 w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={expenseChartData}>
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -436,7 +436,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                 <h2 className="text-xl font-semibold">Profit (6 Months)</h2>
                 <p className="text-sm text-zinc-500">Net profit by month.</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="h-64 min-w-0 w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={summary.chartProfit}>
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -455,7 +455,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                 <h2 className="text-xl font-semibold">Attendance Today</h2>
                 <p className="text-sm text-zinc-500">Present, absent, leave, and late.</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="h-64 min-w-0 w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={summary.chartAttendance}>
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -474,7 +474,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                 <h2 className="text-xl font-semibold">Salary Status</h2>
                 <p className="text-sm text-zinc-500">Paid vs pending this month.</p>
               </div>
-              <div className="h-64 w-full">
+              <div className="h-64 min-w-0 w-full overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={summary.chartSalary}>
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />

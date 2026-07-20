@@ -76,6 +76,7 @@ export function PosTerminal() {
   const [removeCartItem, setRemoveCartItem] = useState<CartItem | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [receiptSnapshot, setReceiptSnapshot] = useState<ReceiptSnapshot | null>(null);
+  const [cashCustomerName, setCashCustomerName] = useState("");
 
   const { products, isLoading } = usePosProducts(search);
   const customersQuery = usePosCustomers();
@@ -113,6 +114,25 @@ export function PosTerminal() {
     },
     [products, pos],
   );
+
+  const voidOrder = useCallback(() => {
+    pos.voidOrder();
+    setCashCustomerName("");
+  }, [pos]);
+
+  const setPaymentMethod = useCallback(
+    (method: "cash" | "credit" | "split") => {
+      pos.setPaymentMethod(method);
+      if (method === "cash") {
+        pos.setCustomer(undefined);
+      } else {
+        setCashCustomerName("");
+      }
+    },
+    [pos],
+  );
+
+  const cashReceiptCustomerName = cashCustomerName.trim() || "Walk-in customer";
 
   const creditDue =
     pos.paymentMethod === "credit" ? computed.grandTotal : pos.paymentMethod === "split" ? Math.max(computed.grandTotal - pos.paidAmount, 0) : 0;
@@ -168,7 +188,7 @@ export function PosTerminal() {
     try {
       const payload = buildSalePayload({
         invoiceNumber,
-        customerId: pos.customerId,
+        customerId: pos.paymentMethod === "cash" ? undefined : pos.customerId,
         items: pos.items,
         discountType: pos.discountType,
         discountValue: pos.discountValue,
@@ -197,20 +217,20 @@ export function PosTerminal() {
         paidAmount: pos.paidAmount,
         changeDue: computed.changeDue,
         paymentMethod: pos.paymentMethod,
-        customerName: selectedCustomer?.name,
+        customerName: pos.paymentMethod === "cash" ? cashReceiptCustomerName : selectedCustomer?.name,
         outstandingBalance: newBalance,
         issuedAt: formatReceiptDateTime(),
       });
 
       toast.success(`Sale completed — ${invoiceNumber}`);
-      pos.voidOrder();
+      voidOrder();
       customersQuery.refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Checkout failed.");
     } finally {
       setCheckoutPending(false);
     }
-  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery]);
+  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery, cashReceiptCustomerName, voidOrder]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -223,13 +243,13 @@ export function PosTerminal() {
         void onCheckout();
       }
       if (event.key === "Escape") {
-        pos.voidOrder();
+        voidOrder();
         toast.message("Order voided.");
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onCheckout, pos]);
+  }, [onCheckout, voidOrder]);
 
   return (
     <div className="space-y-4">
@@ -245,7 +265,7 @@ export function PosTerminal() {
               Held ({pos.heldOrders.length})
             </Button>
           ) : null}
-          <Button variant="ghost" onClick={() => { pos.voidOrder(); toast.message("Order voided."); }}>
+          <Button variant="ghost" onClick={() => { voidOrder(); toast.message("Order voided."); }}>
             <RotateCcw className="h-4 w-4" />
             Void
           </Button>
@@ -283,15 +303,15 @@ export function PosTerminal() {
             </Button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
             {isLoading ? (
               <BlockLoader label="Loading products..." />
             ) : products.length === 0 ? (
               <p className="p-8 text-center text-zinc-500">No active products in stock. Add inventory first.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
-                  <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900/70">
+                <table className="min-w-full divide-y divide-zinc-200 text-sm">
+                  <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-xs uppercase tracking-wide text-zinc-500">
                     <tr>
                       <th className="px-4 py-3 font-medium">Product</th>
                       <th className="px-4 py-3 font-medium">SKU</th>
@@ -301,9 +321,9 @@ export function PosTerminal() {
                       <th className="px-4 py-3 text-right font-medium">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
+                  <tbody className="divide-y divide-zinc-100 bg-white">
                     {products.map((product) => (
-                      <tr key={product._id} className="transition hover:bg-zinc-50 dark:hover:bg-zinc-900/70">
+                      <tr key={product._id} className="transition hover:bg-emerald-50/60">
                         <td className="whitespace-nowrap px-4 py-3 font-medium">{product.productName}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{product.sku}</td>
                         <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-600 dark:text-emerald-400">{currency(product.sellingPrice)}</td>
@@ -312,7 +332,7 @@ export function PosTerminal() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <Input
-                            className="h-9 w-20 bg-white text-zinc-900 dark:bg-zinc-900 dark:text-white"
+                            className="h-9 w-20 bg-white text-zinc-900"
                             type="number"
                             min={1}
                             max={product.quantity}
@@ -391,15 +411,26 @@ export function PosTerminal() {
 
           <div className="mt-4">
             <Label>Customer</Label>
-            <Select className="mt-1.5 bg-zinc-800 text-white" value={pos.customerId ?? ""} onChange={(e) => pos.setCustomer(e.target.value || undefined)}>
-              <option value="">Walk-in customer</option>
-              {customers.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name} — {currency(c.currentBalance ?? 0)} / {currency(c.creditLimit)}
-                </option>
-              ))}
-            </Select>
-            {creditExceeded ? <p className="mt-2 text-xs text-red-400">Credit limit exceeded for this sale.</p> : null}
+            {pos.paymentMethod === "cash" ? (
+              <Input
+                className="mt-1.5 bg-zinc-800 text-white"
+                placeholder="Walk-in customer"
+                value={cashCustomerName}
+                onChange={(e) => setCashCustomerName(e.target.value)}
+              />
+            ) : (
+              <>
+                <Select className="mt-1.5 bg-zinc-800 text-white" value={pos.customerId ?? ""} onChange={(e) => pos.setCustomer(e.target.value || undefined)}>
+                  <option value="">Select customer</option>
+                  {customers.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name} — {currency(c.currentBalance ?? 0)} / {currency(c.creditLimit)}
+                    </option>
+                  ))}
+                </Select>
+                {creditExceeded ? <p className="mt-2 text-xs text-red-400">Credit limit exceeded for this sale.</p> : null}
+              </>
+            )}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -447,7 +478,7 @@ export function PosTerminal() {
 
           <div className="grid grid-cols-3 gap-2">
             {(["cash", "credit", "split"] as const).map((method) => (
-              <Button key={method} size="sm" variant={pos.paymentMethod === method ? "primary" : "secondary"} onClick={() => pos.setPaymentMethod(method)}>
+              <Button key={method} size="sm" variant={pos.paymentMethod === method ? "primary" : "secondary"} onClick={() => setPaymentMethod(method)}>
                 {method}
               </Button>
             ))}

@@ -96,9 +96,9 @@ export function CategoriesManager() {
 
       <Surface>
         <DataToolbar placeholder="Search categories" status={params.status} onSearch={onSearch} onStatusChange={onStatusChange} />
-        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Description</th>
@@ -117,7 +117,7 @@ export function CategoriesManager() {
                 </tr>
               ) : (
                 items.map((item) => (
-                  <tr key={item._id} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-4 py-3 font-medium">{item.name}</td>
                     <td className="px-4 py-3 text-zinc-500">{item.description || "—"}</td>
                     <td className="px-4 py-3">

@@ -164,7 +164,7 @@ export function ResponsiveNavbar({
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0f2420]/95 shadow-lg shadow-emerald-950/30 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0f2420] shadow-lg shadow-emerald-950/30 md:bg-[#0f2420]/95 md:backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 md:px-8">
         <div className="flex items-center gap-3 py-3">
           <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-400">
