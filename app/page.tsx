@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { Store } from "lucide-react";
+import { PageBackground } from "@/components/layout/page-background";
 import { getRoleLandingPath } from "@/lib/access";
 import { authOptions } from "@/lib/auth";
 import { SHOP_PLANS } from "@/lib/saas";
@@ -12,21 +13,8 @@ export default async function LandingPage() {
   if (session?.user) redirect(getRoleLandingPath(session.user.role as Role));
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#0c1f1a] text-[#f3f7f4]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 20% 10%, rgba(52,211,153,0.25), transparent 55%), radial-gradient(ellipse 60% 40% at 85% 20%, rgba(251,191,36,0.18), transparent 50%), linear-gradient(180deg, #0c1f1a 0%, #123029 45%, #0a1814 100%)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.12]"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-        }}
-      />
+    <main className="relative min-h-screen overflow-hidden text-[#f3f7f4]">
+      <PageBackground />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8 md:px-10">
         <header className="flex items-center justify-between gap-4">

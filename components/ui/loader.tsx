@@ -28,7 +28,7 @@ export function Loader({ label, size = "md", className, variant = "center" }: Lo
     return (
       <span className={cn("inline-flex items-center gap-2", className)} role="status" aria-live="polite" aria-busy="true">
         {spinner}
-        {label ? <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span> : null}
+        {label ? <span className="text-sm text-zinc-500">{label}</span> : null}
       </span>
     );
   }
@@ -36,14 +36,14 @@ export function Loader({ label, size = "md", className, variant = "center" }: Lo
   const content = (
     <div className="flex flex-col items-center justify-center gap-3">
       {spinner}
-      {label ? <p className="text-sm text-zinc-500 dark:text-zinc-400">{label}</p> : null}
+      {label ? <p className="text-sm text-zinc-500">{label}</p> : null}
     </div>
   );
 
   if (variant === "overlay") {
     return (
       <div
-        className={cn("absolute inset-0 z-10 flex items-center justify-center bg-white/75 backdrop-blur-sm dark:bg-zinc-950/75", className)}
+        className={cn("absolute inset-0 z-10 flex items-center justify-center bg-[#f6f8f5]/80 backdrop-blur-sm", className)}
         role="status"
         aria-live="polite"
         aria-busy="true"

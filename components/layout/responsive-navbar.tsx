@@ -164,16 +164,16 @@ export function ResponsiveNavbar({
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200/80 bg-[#f7f4ed]/90 shadow-sm backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-950/90">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0f2420]/95 shadow-lg shadow-emerald-950/30 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 md:px-8">
         <div className="flex items-center gap-3 py-3">
-          <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <span className="rounded-2xl bg-emerald-500 p-2.5 text-zinc-950 shadow-sm shadow-emerald-500/20">
+          <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-400">
+            <span className="rounded-2xl bg-emerald-400 p-2.5 text-[#0c1f1a] shadow-sm shadow-emerald-900/30">
               {logo ? <span className="block h-5 w-5 rounded-md bg-cover bg-center" style={{ backgroundImage: `url(${logo})` }} /> : <Store className="h-5 w-5" />}
             </span>
             <span className="min-w-0 leading-tight">
-              <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-400">{appName}</span>
-              <span className="block truncate text-base font-semibold text-zinc-950 dark:text-white">{appTagline}</span>
+              <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300">{appName}</span>
+              <span className="block truncate text-base font-semibold text-white">{appTagline}</span>
             </span>
           </Link>
 
@@ -183,13 +183,18 @@ export function ResponsiveNavbar({
             ) : null}
             <NotificationCenter />
             {role ? (
-              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <span className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-300">
                 {role}
               </span>
             ) : null}
-            {email ? <span className="hidden max-w-64 truncate text-sm text-zinc-500 dark:text-zinc-400 lg:block">{email}</span> : null}
+            {email ? <span className="hidden max-w-64 truncate text-sm text-emerald-50/60 lg:block">{email}</span> : null}
             {email ? (
-              <Button className="shrink-0 border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900" variant="ghost" size="sm" onClick={() => void handleLogout()}>
+              <Button
+                className="shrink-0 border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white"
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleLogout()}
+              >
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
@@ -203,12 +208,19 @@ export function ResponsiveNavbar({
             )}
           </div>
 
-          <Button className="ml-auto shrink-0 border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 md:hidden" variant="ghost" size="sm" onClick={() => setOpen((value) => !value)} aria-label="Toggle navigation" aria-expanded={open}>
+          <Button
+            className="ml-auto shrink-0 border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white md:hidden"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen((value) => !value)}
+            aria-label="Toggle navigation"
+            aria-expanded={open}
+          >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
 
-        <nav className="hidden border-t border-zinc-200/80 py-2 dark:border-zinc-800/80 md:block">
+        <nav className="hidden border-t border-white/10 py-2 md:block">
           <div className="flex flex-wrap gap-2">
             {groupedLinks.map((group) => {
               const groupActive = group.links.some((item) => isActive(item.href));
@@ -221,10 +233,10 @@ export function ResponsiveNavbar({
                       if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) setDropdown(null);
                     }}
                     className={cn(
-                      "flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500",
+                      "flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-400",
                       groupActive
-                        ? "border-zinc-950 bg-zinc-950 text-white dark:border-emerald-500 dark:bg-emerald-500 dark:text-zinc-950"
-                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
+                        ? "border-emerald-400 bg-emerald-400 text-[#0c1f1a]"
+                        : "border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white",
                     )}
                     aria-expanded={dropdown === group.label}
                   >
@@ -234,7 +246,7 @@ export function ResponsiveNavbar({
 
                   {dropdown === group.label ? (
                     <div
-                      className="absolute left-0 top-full z-50 mt-2 w-56 rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl shadow-zinc-950/10 dark:border-zinc-800 dark:bg-zinc-900"
+                      className="absolute left-0 top-full z-50 mt-2 w-56 rounded-2xl border border-zinc-200 bg-[#f6f8f5] p-2 shadow-xl shadow-emerald-950/20"
                       onMouseDown={(event) => event.preventDefault()}
                     >
                       {group.links.map((item) => {
@@ -247,8 +259,8 @@ export function ResponsiveNavbar({
                             className={cn(
                               "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition",
                               isActive(item.href)
-                                ? "bg-emerald-500 text-zinc-950"
-                                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800",
+                                ? "bg-emerald-400 text-[#0c1f1a]"
+                                : "text-zinc-700 hover:bg-white hover:text-zinc-950",
                             )}
                           >
                             <Icon className="h-4 w-4" />
@@ -265,7 +277,7 @@ export function ResponsiveNavbar({
         </nav>
 
         {open ? (
-          <nav className="space-y-4 border-t border-zinc-200 py-4 dark:border-zinc-800 md:hidden">
+          <nav className="space-y-4 border-t border-white/10 py-4 md:hidden">
             <div className="flex items-center justify-between gap-2">
               <NotificationCenter />
               {typeof remainingDays === "number" && remainingDays <= 3 ? (
@@ -274,7 +286,7 @@ export function ResponsiveNavbar({
             </div>
             {groupedLinks.map((group) => (
               <div key={group.label} className="space-y-1">
-                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">{group.label}</p>
+                <p className="px-1 text-xs font-semibold uppercase tracking-wider text-emerald-300/80">{group.label}</p>
                 {group.links.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -284,7 +296,7 @@ export function ResponsiveNavbar({
                       onClick={() => setOpen(false)}
                       className={cn(
                         "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium",
-                        isActive(item.href) ? "bg-emerald-500 text-zinc-950" : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800",
+                        isActive(item.href) ? "bg-emerald-400 text-[#0c1f1a]" : "text-emerald-50 hover:bg-white/10 hover:text-white",
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -295,7 +307,7 @@ export function ResponsiveNavbar({
               </div>
             ))}
             {email ? (
-              <Button className="w-full" variant="secondary" onClick={() => void handleLogout()}>
+              <Button className="w-full border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10" variant="ghost" onClick={() => void handleLogout()}>
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>

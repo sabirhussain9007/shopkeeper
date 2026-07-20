@@ -1,9 +1,13 @@
 import { ForgotPasswordForm } from "@/features/auth/forgot-password-form";
+import { PageBackground } from "@/components/layout/page-background";
 
 export default function ForgotPasswordPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f7f4ed] p-6 dark:bg-zinc-950">
-      <ForgotPasswordForm />
+    <main className="relative grid min-h-screen place-items-center px-4 py-10 md:px-8">
+      <PageBackground />
+      <div className="relative w-full max-w-md">
+        <ForgotPasswordForm />
+      </div>
     </main>
   );
 }

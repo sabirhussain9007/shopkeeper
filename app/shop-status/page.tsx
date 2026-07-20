@@ -6,6 +6,7 @@ import { connectDb } from "@/lib/db";
 import { getRoleLandingPath } from "@/lib/access";
 import { Shop } from "@/models";
 import { SuperAdminSignOut } from "@/features/saas/super-admin-signout";
+import { PageBackground } from "@/components/layout/page-background";
 import type { Role } from "@/types";
 
 export default async function ShopStatusPage() {
@@ -33,24 +34,29 @@ export default async function ShopStatusPage() {
             : "This shop is not currently available.";
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f7f4ed] p-6">
-      <div className="w-full max-w-lg rounded-3xl border border-zinc-200 bg-white p-8 shadow-xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Shop status</p>
-        <h1 className="mt-2 font-[family-name:var(--font-landing-display)] text-3xl">{shop?.name ?? "Your shop"}</h1>
-        <p className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
-          {status}
-        </p>
-        <p className="mt-4 text-zinc-600">{message}</p>
-        {shop?.plan && (
-          <p className="mt-3 text-sm text-zinc-500">
-            Plan: <span className="capitalize">{shop.plan}</span> · Rs. {shop.planAmount} · Payment: {shop.paymentMethod} ({shop.paymentReference})
+    <main className="relative grid min-h-screen place-items-center px-4 py-10">
+      <PageBackground />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f2420]/95 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl">
+        <div className="border-b border-white/10 px-8 py-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Shop status</p>
+          <h1 className="mt-2 font-[family-name:var(--font-landing-display)] text-3xl text-white">{shop?.name ?? "Your shop"}</h1>
+        </div>
+        <div className="space-y-4 bg-[#f6f8f5] p-8 text-zinc-950">
+          <p className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
+            {status}
           </p>
-        )}
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/" className="rounded-xl border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50">
-            Home
-          </Link>
-          <SuperAdminSignOut />
+          <p className="text-zinc-600">{message}</p>
+          {shop?.plan && (
+            <p className="text-sm text-zinc-500">
+              Plan: <span className="capitalize">{shop.plan}</span> · Rs. {shop.planAmount} · Payment: {shop.paymentMethod} ({shop.paymentReference})
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Link href="/" className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 transition hover:bg-zinc-50">
+              Home
+            </Link>
+            <SuperAdminSignOut className="border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950" />
+          </div>
         </div>
       </div>
     </main>

@@ -54,7 +54,7 @@ export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
 
   return (
     <div className="relative">
-      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} className="relative">
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} className="relative border border-white/15 bg-white/5 text-emerald-50 hover:bg-white/10 hover:text-white">
         <Bell className="h-4 w-4" />
         {unreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
@@ -63,7 +63,7 @@ export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
         ) : null}
       </Button>
       {open ? (
-        <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-2xl border border-zinc-200 bg-[#f6f8f5] shadow-xl shadow-emerald-950/20">
           <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2">
             <p className="text-sm font-semibold">Notifications</p>
             <button type="button" className="text-xs text-emerald-700 hover:underline" onClick={() => void markAll()}>
@@ -80,7 +80,7 @@ export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
                   type="button"
                   onClick={() => void markOne(item._id)}
                   className={cn(
-                    "block w-full border-b border-zinc-50 px-3 py-3 text-left hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/60",
+                    "block w-full border-b border-zinc-100 px-3 py-3 text-left hover:bg-white",
                     !item.readAt && "bg-emerald-50/50",
                   )}
                 >

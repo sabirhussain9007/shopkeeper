@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Store } from "lucide-react";
+import { ArrowLeft, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -32,23 +32,32 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-8 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="rounded-2xl bg-emerald-500 p-3 text-zinc-950">
-          <Store className="h-6 w-6" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold">Forgot password</h1>
-          <p className="text-sm text-zinc-500">We will send reset instructions if the account exists.</p>
+    <form
+      onSubmit={onSubmit}
+      className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f2420]/95 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl"
+    >
+      <div className="border-b border-white/10 px-6 py-8 md:px-8">
+        <Link href="/login" className="mb-6 inline-flex items-center gap-2 text-sm text-emerald-100/70 transition hover:text-white">
+          <ArrowLeft className="h-4 w-4" />
+          Back to login
+        </Link>
+        <div className="flex items-center gap-3">
+          <span className="rounded-2xl bg-emerald-400 p-3 text-[#0c1f1a]">
+            <Store className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="font-[family-name:var(--font-landing-display)] text-2xl text-white">Forgot password</h1>
+            <p className="text-sm text-emerald-50/60">We will send reset instructions if the account exists.</p>
+          </div>
         </div>
       </div>
-      <div className="space-y-4">
-        <Input name="email" type="email" placeholder="Email address" required autoComplete="email" />
+      <div className="space-y-4 bg-[#f6f8f5] px-6 py-8 text-zinc-950 md:px-8">
+        <Input name="email" type="email" placeholder="Email address" required autoComplete="email" className="bg-white" />
         <Button className="w-full" type="submit" loading={isPending} loadingLabel="Sending...">
           Send reset link
         </Button>
         {devToken ? (
-          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
             Dev token:{" "}
             <Link className="font-medium underline" href={`/reset-password?token=${devToken}`}>
               use this reset link
@@ -56,7 +65,7 @@ export function ForgotPasswordForm() {
           </p>
         ) : null}
         <p className="text-center text-sm text-zinc-500">
-          <Link className="font-medium text-emerald-700 dark:text-emerald-400" href="/login">
+          <Link className="font-medium text-emerald-700 hover:underline" href="/login">
             Back to login
           </Link>
         </p>

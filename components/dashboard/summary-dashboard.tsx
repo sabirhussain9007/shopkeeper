@@ -274,7 +274,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
         {cards.map(([label, value, Icon]) => (
           <Card key={label}>
             <div className="flex items-center justify-between">
-              <p className="text-sm text-zinc-400">{label}</p>
+              <p className="text-sm text-emerald-50/60">{label}</p>
               <Icon className="h-5 w-5 text-emerald-400" />
             </div>
             <div className="mt-4 text-2xl font-semibold">
