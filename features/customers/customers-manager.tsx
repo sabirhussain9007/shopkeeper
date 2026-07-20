@@ -17,7 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldError } from "@/components/ui/field-error";
 import { useCrud } from "@/hooks/use-crud";
+import { MobileInput, bindMobileField } from "@/components/ui/pakistan-fields";
+import { formatMobileInput } from "@/lib/pakistan-validators";
 import { currency } from "@/lib/utils";
 import { customerSchema } from "@/schemas/domain";
 import type { CustomerInput } from "@/types";
@@ -55,7 +58,7 @@ export function CustomersManager() {
     setEditing(item);
     form.reset({
       name: item.name,
-      phone: item.phone,
+      phone: formatMobileInput(item.phone),
       address: item.address ?? "",
       creditLimit: item.creditLimit,
       openingBalance: item.openingBalance,
@@ -183,8 +186,9 @@ export function CustomersManager() {
               <Input id="name" className="mt-1.5" {...form.register("name")} />
             </div>
             <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input id="phone" className="mt-1.5" {...form.register("phone")} />
+              <Label htmlFor="phone">Mobile</Label>
+              <MobileInput id="phone" className="mt-1.5" {...bindMobileField(form.register, "phone")} />
+              <FieldError message={form.formState.errors.phone?.message} />
             </div>
             <div>
               <Label htmlFor="address">Address</Label>

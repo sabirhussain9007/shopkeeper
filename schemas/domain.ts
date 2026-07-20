@@ -1,10 +1,38 @@
 import { z } from "zod";
+import {
+  CNIC_ERROR,
+  MOBILE_ERROR,
+  isValidCnic,
+  isValidPakistanMobile,
+  normalizeCnic,
+  normalizePakistanMobile,
+} from "@/lib/pakistan-validators";
 import { permissions, shopRoles } from "@/types";
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const money = z.coerce.number().min(0);
-const phone = z.string().min(5).max(30);
 const status = z.enum(["active", "inactive"]);
+
+export const cnicSchema = z
+  .string()
+  .trim()
+  .min(1, "CNIC is required")
+  .refine(isValidCnic, CNIC_ERROR)
+  .transform(normalizeCnic);
+
+export const pakistanMobileSchema = z
+  .string()
+  .trim()
+  .min(1, "Mobile number is required")
+  .refine(isValidPakistanMobile, MOBILE_ERROR)
+  .transform(normalizePakistanMobile);
+
+export const pakistanMobileOptionalSchema = z
+  .string()
+  .trim()
+  .default("")
+  .refine((value) => value === "" || isValidPakistanMobile(value), MOBILE_ERROR)
+  .transform((value) => (value === "" ? "" : normalizePakistanMobile(value)));
 
 export const paginationSchema = z.object({
   q: z.string().optional(),
@@ -44,7 +72,7 @@ export const createShopSchema = z
     shopName: z.string().min(2).max(160),
     ownerName: z.string().min(2).max(120),
     ownerEmail: z.string().email().toLowerCase(),
-    ownerPhone: z.string().min(5).max(30).optional().default(""),
+    ownerPhone: pakistanMobileOptionalSchema,
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
     plan: z.enum(["monthly", "yearly"]),
@@ -65,7 +93,7 @@ export const categorySchema = z.object({
 export const supplierSchema = z.object({
   supplierName: z.string().min(2).max(160),
   contactPerson: z.string().max(120).optional().default(""),
-  phone,
+  phone: pakistanMobileSchema,
   address: z.string().max(500).optional().default(""),
   notes: z.string().max(1000).optional().default(""),
   openingBalance: money.default(0),
@@ -74,7 +102,7 @@ export const supplierSchema = z.object({
 
 export const customerSchema = z.object({
   name: z.string().min(2).max(160),
-  phone,
+  phone: pakistanMobileSchema,
   address: z.string().max(500).optional().default(""),
   creditLimit: money.default(0),
   openingBalance: z.coerce.number().default(0),
@@ -174,11 +202,7 @@ export const settingsSchema = z.object({
   dashboardTitle: z.string().min(2).max(160).default("Enterprise Retail Management"),
   businessName: z.string().min(2).max(160),
   address: z.string().max(500).default(""),
-  phone: z
-    .string()
-    .max(30)
-    .regex(/^[+\d\s().-]*$/, "Phone can only contain numbers, spaces, +, -, parentheses, and dots.")
-    .default(""),
+  phone: pakistanMobileOptionalSchema,
   email: z.string().email().optional().or(z.literal("")).default(""),
   gstVatNumber: z.string().max(80).default(""),
   ntn: z.string().max(80).default(""),
@@ -271,8 +295,8 @@ export const expenseCategories = [
 export const employeeSchema = z.object({
   fullName: z.string().min(2).max(160),
   profileImage: z.string().max(2_500_000).optional().default(""),
-  cnic: z.string().min(5).max(20),
-  phone,
+  cnic: cnicSchema,
+  phone: pakistanMobileSchema,
   email: z.string().email().toLowerCase().optional().or(z.literal("")).default(""),
   address: z.string().max(500).optional().default(""),
   dateOfBirth: z.coerce.date().optional().nullable(),
@@ -282,7 +306,7 @@ export const employeeSchema = z.object({
   salary: money.default(0),
   employmentType: z.enum(["full_time", "part_time", "contract", "intern"]).default("full_time"),
   shift: z.enum(["morning", "evening", "night", "flexible"]).default("morning"),
-  emergencyContact: z.string().max(120).optional().default(""),
+  emergencyContact: pakistanMobileOptionalSchema,
   status: status.default("active"),
   notes: z.string().max(1000).optional().default(""),
 });

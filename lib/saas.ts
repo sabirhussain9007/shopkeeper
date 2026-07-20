@@ -1,3 +1,5 @@
+import { getValidatedPlatformPaymentAccounts } from "@/lib/payment-env";
+
 export const SHOP_PLANS = {
   monthly: {
     id: "monthly" as const,
@@ -27,15 +29,7 @@ export function getPlanExpiry(plan: ShopPlanId, from = new Date()) {
 }
 
 export function getPlatformPaymentAccounts() {
-  return {
-    easypaisa: process.env.PAYMENT_EASYPAISA ?? "03XX-XXXXXXX",
-    jazzcash: process.env.PAYMENT_JAZZCASH ?? "03XX-XXXXXXX",
-    bank: {
-      bankName: process.env.PAYMENT_BANK_NAME ?? "HBL",
-      accountTitle: process.env.PAYMENT_BANK_TITLE ?? "Shopkeeper SaaS",
-      accountNumber: process.env.PAYMENT_BANK_ACCOUNT ?? "00000000000000",
-    },
-  };
+  return getValidatedPlatformPaymentAccounts();
 }
 
 export function slugifyShopName(name: string) {

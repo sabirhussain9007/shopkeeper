@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
+import { FieldError } from "@/components/ui/field-error";
 import { BlockLoader } from "@/components/ui/loader";
 import { Receipt } from "@/components/printing/receipt";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { settingsSchema } from "@/schemas/domain";
+import { MobileInput, bindMobileField } from "@/components/ui/pakistan-fields";
+import { formatMobileInput } from "@/lib/pakistan-validators";
 import { DEFAULT_CASHIER_ROUTES, DEFAULT_MANAGER_ROUTES, NAV_ROUTES, type NavRouteId } from "@/lib/nav-access";
 import { shopRoles, type ShopRole, type SettingsInput } from "@/types";
 
@@ -81,7 +84,12 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    values: settingsQuery.data ?? undefined,
+    values: settingsQuery.data
+      ? {
+          ...settingsQuery.data,
+          phone: settingsQuery.data.phone ? formatMobileInput(settingsQuery.data.phone) : "",
+        }
+      : undefined,
   });
 
   const userForm = useForm<UserFormValues>({ resolver: zodResolver(userFormSchema), defaultValues: emptyUser });
@@ -101,7 +109,10 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
     },
     onSuccess: async (settings) => {
       queryClient.setQueryData(["settings-current"], settings);
-      form.reset(settings);
+      form.reset({
+        ...settings,
+        phone: settings.phone ? formatMobileInput(settings.phone) : "",
+      });
       await queryClient.invalidateQueries({ queryKey: ["settings-current"] });
       queryClient.invalidateQueries({ queryKey: ["pos-settings"] });
       router.refresh();
@@ -272,8 +283,9 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                     <Textarea id="address" {...form.register("address")} />
                   </div>
                   <div>
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" {...form.register("phone")} />
+                    <Label htmlFor="phone">Mobile</Label>
+                    <MobileInput id="phone" className="mt-1.5" {...bindMobileField(form.register, "phone")} />
+                    <FieldError message={form.formState.errors.phone?.message} />
                   </div>
                   <div>
                     <Label htmlFor="email">Email</Label>

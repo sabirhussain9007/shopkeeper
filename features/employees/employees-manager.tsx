@@ -19,7 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldError } from "@/components/ui/field-error";
 import { useCrud } from "@/hooks/use-crud";
+import { CnicInput, MobileInput, bindCnicField, bindMobileField } from "@/components/ui/pakistan-fields";
+import { formatCnicInput, formatMobileInput } from "@/lib/pakistan-validators";
 import { currency } from "@/lib/utils";
 import { employeeSchema } from "@/schemas/domain";
 import type { EmployeeInput } from "@/types";
@@ -95,8 +98,8 @@ export function EmployeesManager() {
     form.reset({
       fullName: item.fullName,
       profileImage: item.profileImage ?? "",
-      cnic: item.cnic,
-      phone: item.phone,
+      cnic: formatCnicInput(item.cnic),
+      phone: formatMobileInput(item.phone),
       email: item.email ?? "",
       address: item.address ?? "",
       dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth) : null,
@@ -106,7 +109,7 @@ export function EmployeesManager() {
       salary: item.salary,
       employmentType: item.employmentType,
       shift: item.shift,
-      emergencyContact: item.emergencyContact ?? "",
+      emergencyContact: item.emergencyContact ? formatMobileInput(item.emergencyContact) : "",
       status: item.status,
       notes: item.notes ?? "",
     });
@@ -260,11 +263,13 @@ export function EmployeesManager() {
               </div>
               <div>
                 <Label htmlFor="cnic">CNIC</Label>
-                <Input id="cnic" className="mt-1.5" {...form.register("cnic")} />
+                <CnicInput id="cnic" className="mt-1.5" {...bindCnicField(form.register, "cnic")} />
+                <FieldError message={form.formState.errors.cnic?.message} />
               </div>
               <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" className="mt-1.5" {...form.register("phone")} />
+                <Label htmlFor="phone">Mobile</Label>
+                <MobileInput id="phone" className="mt-1.5" {...bindMobileField(form.register, "phone")} />
+                <FieldError message={form.formState.errors.phone?.message} />
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -325,8 +330,9 @@ export function EmployeesManager() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="emergencyContact">Emergency Contact</Label>
-                <Input id="emergencyContact" className="mt-1.5" {...form.register("emergencyContact")} />
+                <Label htmlFor="emergencyContact">Emergency Contact (Mobile)</Label>
+                <MobileInput id="emergencyContact" className="mt-1.5" {...bindMobileField(form.register, "emergencyContact")} />
+                <FieldError message={form.formState.errors.emergencyContact?.message} />
               </div>
               <div>
                 <Label htmlFor="status">Status</Label>

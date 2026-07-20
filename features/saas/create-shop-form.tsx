@@ -8,6 +8,9 @@ import { ArrowLeft, BadgeCheck, Building2, Clock, Receipt, ShieldCheck, Smartpho
 import { Loader } from "@/components/ui/loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createShopSchema } from "@/schemas/domain";
+import { MobileInput, formatMobileOnInput } from "@/components/ui/pakistan-fields";
+import { MOBILE_PLACEHOLDER } from "@/lib/pakistan-validators";
 import { SHOP_PLANS, type ShopPaymentMethod, type ShopPlanId } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
@@ -67,10 +70,17 @@ export function CreateShopForm() {
       paymentReference: String(form.get("paymentReference") ?? ""),
     };
 
+    const parsed = createShopSchema.safeParse(payload);
+    if (!parsed.success) {
+      setIsPending(false);
+      toast.error(parsed.error.issues[0]?.message ?? "Please check the form.");
+      return;
+    }
+
     const res = await fetch("/api/shops", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(parsed.data),
     });
     const data = (await res.json()) as { error?: string; message?: string };
     setIsPending(false);
@@ -208,7 +218,7 @@ export function CreateShopForm() {
             <Input name="shopName" placeholder="Shop name" required className="bg-white" />
             <Input name="ownerName" placeholder="Owner full name" required className="bg-white" />
             <Input name="ownerEmail" type="email" placeholder="Owner email" required autoComplete="email" className="bg-white" />
-            <Input name="ownerPhone" placeholder="Phone (optional)" className="bg-white" />
+            <MobileInput name="ownerPhone" className="bg-white" placeholder={`Owner mobile (${MOBILE_PLACEHOLDER})`} onChange={formatMobileOnInput} />
             <Input name="password" type="password" placeholder="Password (min 8)" required autoComplete="new-password" className="bg-white" />
             <Input name="confirmPassword" type="password" placeholder="Confirm password" required autoComplete="new-password" className="bg-white" />
           </div>

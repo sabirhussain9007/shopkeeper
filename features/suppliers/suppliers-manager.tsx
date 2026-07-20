@@ -17,7 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldError } from "@/components/ui/field-error";
 import { useCrud } from "@/hooks/use-crud";
+import { MobileInput, bindMobileField } from "@/components/ui/pakistan-fields";
+import { formatMobileInput } from "@/lib/pakistan-validators";
 import { supplierSchema } from "@/schemas/domain";
 import type { SupplierInput } from "@/types";
 
@@ -55,7 +58,7 @@ export function SuppliersManager() {
     form.reset({
       supplierName: item.supplierName,
       contactPerson: item.contactPerson ?? "",
-      phone: item.phone,
+      phone: formatMobileInput(item.phone),
       address: item.address ?? "",
       notes: item.notes ?? "",
       openingBalance: item.openingBalance,
@@ -154,7 +157,11 @@ export function SuppliersManager() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div><Label>Supplier Name</Label><Input className="mt-1.5" {...form.register("supplierName")} /></div>
             <div><Label>Contact Person</Label><Input className="mt-1.5" {...form.register("contactPerson")} /></div>
-            <div><Label>Phone</Label><Input className="mt-1.5" {...form.register("phone")} /></div>
+            <div>
+              <Label>Mobile</Label>
+              <MobileInput className="mt-1.5" {...bindMobileField(form.register, "phone")} />
+              <FieldError message={form.formState.errors.phone?.message} />
+            </div>
             <div><Label>Address</Label><Textarea className="mt-1.5" {...form.register("address")} /></div>
             <div><Label>Notes</Label><Textarea className="mt-1.5" {...form.register("notes")} /></div>
             <div><Label>Status</Label>
