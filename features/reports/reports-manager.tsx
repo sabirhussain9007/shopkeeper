@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, Surface } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { currency, percentage } from "@/lib/utils";
+import { currency, percentage, formatPakistanDateInput, pakistanMonthStart, pakistanTodayKey } from "@/lib/utils";
 import { BlockLoader } from "@/components/ui/loader";
 import { exportRowsToPdf } from "@/services/report-export";
 
@@ -30,11 +30,8 @@ type ReportData = {
 
 export function ReportsManager() {
   const [type, setType] = useState<ReportType>("sales");
-  const [start, setStart] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-  });
-  const [end, setEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [start, setStart] = useState(() => formatPakistanDateInput(pakistanMonthStart()));
+  const [end, setEnd] = useState(() => pakistanTodayKey());
 
   const report = useQuery({
     queryKey: ["report", type, start, end],
@@ -115,7 +112,7 @@ export function ReportsManager() {
               ))}
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+            <div className="responsive-table-shell">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                   <tr>

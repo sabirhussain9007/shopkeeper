@@ -29,6 +29,9 @@ type ReceiptProps = {
   paymentMethod: PaymentMethod;
   outstandingBalance?: number;
   issuedAt?: string;
+  chequeNumber?: string;
+  bankName?: string;
+  chequeDate?: string;
 };
 
 export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
@@ -55,6 +58,9 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
     paymentMethod,
     outstandingBalance,
     issuedAt,
+    chequeNumber,
+    bankName,
+    chequeDate,
   },
   ref,
 ) {
@@ -159,6 +165,28 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
         <span>Payment</span>
         <span>{paymentMethod.toUpperCase()}</span>
       </div>
+      {paymentMethod === "cheque" ? (
+        <>
+          {chequeNumber ? (
+            <div className="row">
+              <span>Cheque #</span>
+              <span>{chequeNumber}</span>
+            </div>
+          ) : null}
+          {chequeDate ? (
+            <div className="row">
+              <span>Cheque date</span>
+              <span>{chequeDate}</span>
+            </div>
+          ) : null}
+          {bankName ? (
+            <div className="row">
+              <span>Bank</span>
+              <span>{bankName}</span>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {paymentMethod !== "credit" ? (
         <div className="row">
           <span>Paid</span>

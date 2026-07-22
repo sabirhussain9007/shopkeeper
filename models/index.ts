@@ -50,6 +50,12 @@ const userSchema = new Schema(
     lastLoginAt: Date,
     resetTokenHash: String,
     resetTokenExpiresAt: Date,
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockedUntil: Date,
+    emailVerified: { type: Boolean, default: false },
+    emailVerifyTokenHash: String,
+    emailVerifyExpiresAt: Date,
+    profileImage: String,
     ...auditFields,
   },
   schemaOptions,
@@ -70,6 +76,10 @@ const categorySchema = new Schema(
     shopId: shopRef,
     name: { type: String, required: true, trim: true },
     description: String,
+    parentId: { type: Schema.Types.ObjectId, ref: "Category", index: true },
+    icon: String,
+    image: String,
+    sortOrder: { type: Number, default: 0, index: true },
     status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
     ...auditFields,
   },
@@ -86,6 +96,7 @@ const supplierSchema = new Schema(
     address: String,
     notes: String,
     openingBalance: { type: Number, default: 0 },
+    currentBalance: { type: Number, default: 0, index: true },
     status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
     ...auditFields,
   },
@@ -101,6 +112,8 @@ const customerSchema = new Schema(
     creditLimit: { type: Number, default: 0 },
     openingBalance: { type: Number, default: 0 },
     currentBalance: { type: Number, default: 0, index: true },
+    groupId: { type: Schema.Types.ObjectId, ref: "CustomerGroup", index: true },
+    rewardPoints: { type: Number, default: 0 },
     notes: String,
     status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
     ...auditFields,
@@ -122,12 +135,18 @@ const productSchema = new Schema(
     barcode: { type: String, index: true },
     category: { type: Schema.Types.ObjectId, ref: "Category", index: true },
     brand: String,
+    brandId: { type: Schema.Types.ObjectId, ref: "Brand", index: true },
     unit: { type: String, default: "pcs" },
     purchasePrice: { type: Number, required: true, min: 0 },
+    costPrice: { type: Number, default: 0, min: 0 },
     sellingPrice: { type: Number, required: true, min: 0 },
     taxRate: { type: Number, default: 0 },
     quantity: { type: Number, default: 0, min: 0, index: true },
     reorderLevel: { type: Number, default: 5, index: true },
+    maxStock: { type: Number, default: 0 },
+    expiryDate: { type: Date, index: true },
+    qrCode: String,
+    warehouse: { type: Schema.Types.ObjectId, ref: "Warehouse", index: true },
     supplier: { type: Schema.Types.ObjectId, ref: "Supplier", index: true },
     productImage: String,
     description: String,
@@ -170,9 +189,13 @@ const saleSchema = new Schema(
     grandTotal: { type: Number, required: true, index: true },
     paidAmount: { type: Number, default: 0 },
     changeDue: { type: Number, default: 0 },
-    paymentMethod: { type: String, enum: ["cash", "credit", "split"], required: true, index: true },
+    paymentMethod: { type: String, enum: ["cash", "credit", "split", "card", "bank", "easypaisa", "jazzcash", "cheque"], required: true, index: true },
     status: { type: String, enum: ["draft", "held", "completed", "void", "refunded"], default: "completed", index: true },
     notes: String,
+    couponCode: String,
+    chequeNumber: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    chequeDate: Date,
     ...auditFields,
   },
   schemaOptions,
@@ -189,6 +212,18 @@ const purchaseItemSchema = new Schema(
     quantity: Number,
     cost: Number,
     taxRate: Number,
+    discountType: { type: String, enum: ["flat", "flat_per_piece", "percentage"], default: "flat" },
+    discountValue: { type: Number, default: 0 },
+    salesTaxType: { type: String, enum: ["flat", "percentage"], default: "percentage" },
+    salesTaxValue: { type: Number, default: 0 },
+    grossAmount: { type: Number, default: 0 },
+    netAmount: { type: Number, default: 0 },
+    orderedQuantity: Number,
+    orderedCost: Number,
+    orderedDiscountType: { type: String, enum: ["flat", "flat_per_piece", "percentage"], default: "flat" },
+    orderedDiscountValue: { type: Number, default: 0 },
+    orderedSalesTaxType: { type: String, enum: ["flat", "percentage"], default: "percentage" },
+    orderedSalesTaxValue: { type: Number, default: 0 },
     lineTotal: Number,
     ...auditFields,
   },
@@ -199,11 +234,26 @@ const purchaseSchema = new Schema(
   {
     shopId: shopRef,
     supplier: { type: Schema.Types.ObjectId, ref: "Supplier", required: true, index: true },
+    invoiceNumber: { type: String, trim: true, index: true },
+    orderDate: { type: Date, default: Date.now, index: true },
     subtotal: Number,
+    discountType: { type: String, enum: ["flat", "percentage"], default: "flat" },
+    discountValue: { type: Number, default: 0 },
+    discountAmount: { type: Number, default: 0 },
+    salesTaxType: { type: String, enum: ["flat", "percentage"], default: "flat" },
+    salesTaxValue: { type: Number, default: 0 },
+    salesTaxAmount: { type: Number, default: 0 },
     taxes: Number,
     grandTotal: Number,
+    orderedGrandTotal: Number,
+    adjustmentAmount: { type: Number, default: 0 },
     paidAmount: Number,
+    paymentMethod: { type: String, enum: ["cash", "cheque", "credit"], default: "cash" },
+    chequeNumber: String,
+    chequeDate: Date,
+    bankName: { type: String, trim: true },
     status: { type: String, enum: ["ordered", "received", "cancelled"], default: "ordered", index: true },
+    purchaseKind: { type: String, enum: ["order", "spot"], default: "order", index: true },
     ...auditFields,
   },
   schemaOptions,
@@ -214,11 +264,16 @@ const ledgerEntrySchema = new Schema(
     shopId: shopRef,
     customer: { type: Schema.Types.ObjectId, ref: "Customer", required: true, index: true },
     sale: { type: Schema.Types.ObjectId, ref: "Sale", index: true },
-    type: { type: String, enum: ["credit_sale", "payment_received", "adjustment"], required: true, index: true },
+    type: { type: String, enum: ["credit_sale", "payment_received", "adjustment", "cheque_bounce"], required: true, index: true },
     debit: { type: Number, default: 0 },
     credit: { type: Number, default: 0 },
     balance: { type: Number, required: true },
     description: { type: String, required: true },
+    relatedEntry: { type: Schema.Types.ObjectId, ref: "LedgerEntry", index: true },
+    paymentMethod: { type: String, enum: ["cash", "cheque", "bank", "easypaisa", "jazzcash", "card"] },
+    reference: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    chequeDate: Date,
     entryDate: { type: Date, default: Date.now, index: true },
     ...auditFields,
   },
@@ -262,6 +317,9 @@ const settingSchema = new Schema(
     thankYouMessage: String,
     managerRoutes: [{ type: String }],
     cashierRoutes: [{ type: String }],
+    timezone: { type: String, default: "Asia/Karachi" },
+    language: { type: String, default: "en" },
+    theme: { type: String, enum: ["light", "dark", "system"], default: "light" },
     ...auditFields,
   },
   schemaOptions,
@@ -350,6 +408,7 @@ const expenseSchemaDef = new Schema(
     amount: { type: Number, required: true },
     expenseDate: { type: Date, required: true, index: true },
     paymentMethod: { type: String, enum: ["cash", "bank", "easypaisa", "jazzcash", "other"], default: "cash" },
+    bankName: { type: String, trim: true },
     reference: String,
     notes: String,
     status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
@@ -401,6 +460,155 @@ const notificationSchema = new Schema(
 notificationSchema.index({ userId: 1, readAt: 1, createdAt: -1 });
 notificationSchema.index({ audience: 1, createdAt: -1 });
 
+const brandSchema = new Schema(
+  {
+    shopId: shopRef,
+    name: { type: String, required: true, trim: true, index: true },
+    logo: String,
+    description: String,
+    status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+brandSchema.index({ shopId: 1, name: 1 }, { unique: true });
+
+const bankAccountSchemaDef = new Schema(
+  {
+    shopId: shopRef,
+    accountType: { type: String, enum: ["bank", "easypaisa", "jazzcash"], default: "bank", index: true },
+    name: { type: String, required: true, trim: true, index: true },
+    accountTitle: { type: String, required: true, trim: true },
+    accountNumber: { type: String, required: true, trim: true, index: true },
+    branch: { type: String, trim: true },
+    iban: { type: String, trim: true },
+    notes: { type: String, trim: true },
+    status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+bankAccountSchemaDef.index({ shopId: 1, name: 1 }, { unique: true });
+
+const warehouseSchema = new Schema(
+  {
+    shopId: shopRef,
+    name: { type: String, required: true, trim: true, index: true },
+    code: { type: String, required: true, uppercase: true, index: true },
+    address: String,
+    phone: String,
+    isDefault: { type: Boolean, default: false },
+    status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+warehouseSchema.index({ shopId: 1, code: 1 }, { unique: true });
+
+const couponSchema = new Schema(
+  {
+    shopId: shopRef,
+    code: { type: String, required: true, uppercase: true, index: true },
+    type: { type: String, enum: ["flat", "percentage"], default: "flat" },
+    value: { type: Number, required: true, min: 0 },
+    minOrder: { type: Number, default: 0 },
+    maxUses: { type: Number, default: 0 },
+    usedCount: { type: Number, default: 0 },
+    startsAt: Date,
+    expiresAt: Date,
+    status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+couponSchema.index({ shopId: 1, code: 1 }, { unique: true });
+
+const customerGroupSchema = new Schema(
+  {
+    shopId: shopRef,
+    name: { type: String, required: true, trim: true },
+    discountPercent: { type: Number, default: 0 },
+    description: String,
+    status: { type: String, enum: ["active", "inactive"], default: "active", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+customerGroupSchema.index({ shopId: 1, name: 1 }, { unique: true });
+
+const supplierLedgerSchema = new Schema(
+  {
+    shopId: shopRef,
+    supplier: { type: Schema.Types.ObjectId, ref: "Supplier", required: true, index: true },
+    purchase: { type: Schema.Types.ObjectId, ref: "Purchase", index: true },
+    type: { type: String, enum: ["purchase", "payment", "adjustment", "return", "cheque_bounce"], required: true, index: true },
+    debit: { type: Number, default: 0 },
+    credit: { type: Number, default: 0 },
+    balance: { type: Number, required: true },
+    description: { type: String, required: true },
+    relatedEntry: { type: Schema.Types.ObjectId, ref: "SupplierLedgerEntry", index: true },
+    paymentMethod: { type: String, enum: ["cash", "cheque", "bank", "easypaisa", "jazzcash", "card"] },
+    reference: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    chequeDate: Date,
+    entryDate: { type: Date, default: Date.now, index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+supplierLedgerSchema.index({ supplier: 1, entryDate: -1 });
+
+const accountingSourceTypes = [
+  "sale",
+  "purchase",
+  "expense",
+  "salary",
+  "customer_payment",
+  "vendor_payment",
+  "deposit",
+  "cheque_bounce_repay",
+  "manual",
+  "refund",
+] as const;
+
+const accountingEntrySchema = new Schema(
+  {
+    shopId: shopRef,
+    book: { type: String, enum: ["cash", "bank", "income", "expense"], required: true, index: true },
+    type: { type: String, enum: ["debit", "credit"], required: true },
+    amount: { type: Number, required: true, min: 0 },
+    reference: String,
+    description: { type: String, required: true },
+    entryDate: { type: Date, default: Date.now, index: true },
+    sourceType: { type: String, enum: accountingSourceTypes, index: true },
+    sourceId: { type: Schema.Types.ObjectId, index: true },
+    paymentMethod: { type: String, enum: ["cash", "cheque", "bank", "easypaisa", "jazzcash", "card"] },
+    bankName: { type: String, trim: true, index: true },
+    chequeNumber: { type: String, trim: true },
+    chequeDate: Date,
+    counterpartyName: { type: String, trim: true },
+    eventKey: { type: String, trim: true, index: true, sparse: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+accountingEntrySchema.index({ shopId: 1, book: 1, entryDate: -1 });
+accountingEntrySchema.index({ shopId: 1, eventKey: 1 }, { unique: true, sparse: true });
+
+const stockTransferSchema = new Schema(
+  {
+    shopId: shopRef,
+    product: { type: Schema.Types.ObjectId, ref: "Product", required: true, index: true },
+    fromWarehouse: { type: Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    toWarehouse: { type: Schema.Types.ObjectId, ref: "Warehouse", required: true },
+    quantity: { type: Number, required: true, min: 1 },
+    notes: String,
+    status: { type: String, enum: ["pending", "completed", "cancelled"], default: "completed", index: true },
+    ...auditFields,
+  },
+  schemaOptions,
+);
+
 export const Shop = (models.Shop as Model<InferSchemaType<typeof shopSchema>>) || model("Shop", shopSchema);
 export const User = (models.User as Model<InferSchemaType<typeof userSchema>>) || model("User", userSchema);
 export const RoleModel = (models.Role as Model<InferSchemaType<typeof roleSchema>>) || model("Role", roleSchema);
@@ -408,10 +616,16 @@ export const Product = (models.Product as Model<InferSchemaType<typeof productSc
 export const Category = (models.Category as Model<InferSchemaType<typeof categorySchema>>) || model("Category", categorySchema);
 export const Customer = (models.Customer as Model<InferSchemaType<typeof customerSchema>>) || model("Customer", customerSchema);
 export const Supplier = (models.Supplier as Model<InferSchemaType<typeof supplierSchema>>) || model("Supplier", supplierSchema);
+if (process.env.NODE_ENV !== "production") {
+  delete models.Sale;
+}
 export const Sale = (models.Sale as Model<InferSchemaType<typeof saleSchema>>) || model("Sale", saleSchema);
 export const SaleItem = (models.SaleItem as Model<InferSchemaType<typeof saleItemSchema>>) || model("SaleItem", saleItemSchema);
 export const Purchase = (models.Purchase as Model<InferSchemaType<typeof purchaseSchema>>) || model("Purchase", purchaseSchema);
 export const PurchaseItem = (models.PurchaseItem as Model<InferSchemaType<typeof purchaseItemSchema>>) || model("PurchaseItem", purchaseItemSchema);
+if (process.env.NODE_ENV !== "production") {
+  delete models.LedgerEntry;
+}
 export const LedgerEntry = (models.LedgerEntry as Model<InferSchemaType<typeof ledgerEntrySchema>>) || model("LedgerEntry", ledgerEntrySchema);
 export const StockAdjustment = (models.StockAdjustment as Model<InferSchemaType<typeof stockAdjustmentSchema>>) || model("StockAdjustment", stockAdjustmentSchema);
 export const Setting = (models.Setting as Model<InferSchemaType<typeof settingSchema>>) || model("Setting", settingSchema);
@@ -421,3 +635,25 @@ export const Salary = (models.Salary as Model<InferSchemaType<typeof salarySchem
 export const Expense = (models.Expense as Model<InferSchemaType<typeof expenseSchemaDef>>) || model("Expense", expenseSchemaDef);
 export const ActivityLog = (models.ActivityLog as Model<InferSchemaType<typeof activityLogSchema>>) || model("ActivityLog", activityLogSchema);
 export const Notification = (models.Notification as Model<InferSchemaType<typeof notificationSchema>>) || model("Notification", notificationSchema);
+export const Brand = (models.Brand as Model<InferSchemaType<typeof brandSchema>>) || model("Brand", brandSchema);
+if (process.env.NODE_ENV !== "production") {
+  delete models.BankAccount;
+}
+export const BankAccount =
+  (models.BankAccount as Model<InferSchemaType<typeof bankAccountSchemaDef>>) || model("BankAccount", bankAccountSchemaDef);
+export const Warehouse = (models.Warehouse as Model<InferSchemaType<typeof warehouseSchema>>) || model("Warehouse", warehouseSchema);
+export const Coupon = (models.Coupon as Model<InferSchemaType<typeof couponSchema>>) || model("Coupon", couponSchema);
+export const CustomerGroup = (models.CustomerGroup as Model<InferSchemaType<typeof customerGroupSchema>>) || model("CustomerGroup", customerGroupSchema);
+if (process.env.NODE_ENV !== "production") {
+  delete models.SupplierLedgerEntry;
+}
+export const SupplierLedgerEntry =
+  (models.SupplierLedgerEntry as Model<InferSchemaType<typeof supplierLedgerSchema>>) ||
+  model("SupplierLedgerEntry", supplierLedgerSchema);
+if (process.env.NODE_ENV !== "production") {
+  delete models.AccountingEntry;
+}
+export const AccountingEntry =
+  (models.AccountingEntry as Model<InferSchemaType<typeof accountingEntrySchema>>) ||
+  model("AccountingEntry", accountingEntrySchema);
+export const StockTransfer = (models.StockTransfer as Model<InferSchemaType<typeof stockTransferSchema>>) || model("StockTransfer", stockTransferSchema);

@@ -1,4 +1,5 @@
 import { connectDb } from "@/lib/db";
+import { formatPakistanDate } from "@/lib/datetime";
 import { withShopFilter } from "@/lib/tenant";
 import { Customer, Product, Sale, SaleItem } from "@/models";
 
@@ -7,7 +8,7 @@ type DateRange = { start: Date; end: Date; shopId: string };
 type Timestamped = { createdAt?: Date | string };
 
 function formatDate(doc: Timestamped) {
-  return doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "-";
+  return doc.createdAt ? formatPakistanDate(doc.createdAt, "-") : "-";
 }
 
 export async function getSalesReport({ start, end, shopId }: DateRange) {

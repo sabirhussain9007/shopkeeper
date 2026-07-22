@@ -26,7 +26,7 @@ type Category = CategoryInput & { _id: string; createdAt?: string };
 const formSchema = categorySchema;
 type FormValues = z.input<typeof formSchema>;
 
-const emptyValues: FormValues = { name: "", description: "", status: "active" };
+const emptyValues: FormValues = { name: "", description: "", parentId: undefined, icon: "", image: "", sortOrder: 0, status: "active" };
 
 export function CategoriesManager() {
   const { list, create, update, remove, params, setParams } = useCrud<CategoryInput, Category>("categories");
@@ -44,7 +44,15 @@ export function CategoriesManager() {
 
   const openEdit = (item: Category) => {
     setEditing(item);
-    form.reset({ name: item.name, description: item.description ?? "", status: item.status });
+    form.reset({
+      name: item.name,
+      description: item.description ?? "",
+      parentId: (item as Category & { parentId?: string }).parentId,
+      icon: (item as Category & { icon?: string }).icon ?? "",
+      image: (item as Category & { image?: string }).image ?? "",
+      sortOrder: (item as Category & { sortOrder?: number }).sortOrder ?? 0,
+      status: item.status,
+    });
     setDialogOpen(true);
   };
 
@@ -53,7 +61,10 @@ export function CategoriesManager() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const payload = formSchema.parse(values);
+      const payload = formSchema.parse({
+        ...values,
+        parentId: values.parentId || undefined,
+      });
       if (editing) {
         await update.mutateAsync({ id: editing._id, input: payload });
         toast.success("Category updated.");
@@ -96,7 +107,7 @@ export function CategoriesManager() {
 
       <Surface>
         <DataToolbar placeholder="Search categories" status={params.status} onSearch={onSearch} onStatusChange={onStatusChange} />
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
@@ -158,6 +169,19 @@ export function CategoriesManager() {
             <div>
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" className="mt-1.5" {...form.register("description")} />
+            </div>
+            <div>
+              <Label htmlFor="parentId">Parent category</Label>
+              <Select id="parentId" className="mt-1.5" {...form.register("parentId")}>
+                <option value="">None (top level)</option>
+                {items.filter((c) => c._id !== editing?._id).map((c) => (
+                  <option key={c._id} value={c._id}>{c.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="sortOrder">Sort order</Label>
+              <Input id="sortOrder" type="number" className="mt-1.5" {...form.register("sortOrder", { valueAsNumber: true })} />
             </div>
             <div>
               <Label htmlFor="status">Status</Label>

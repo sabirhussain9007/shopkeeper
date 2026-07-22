@@ -9,6 +9,8 @@ import { Surface } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { formatClientIpForDisplay } from "@/lib/request-meta";
+import { formatPakistanDateTime } from "@/lib/utils";
 
 type ActivityLog = {
   _id: string;
@@ -172,8 +174,8 @@ export function ActivityLogs() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+        <div className="responsive-table-shell responsive-table-shell--xl">
+          <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-3 py-3 font-medium">Timestamp</th>
@@ -207,7 +209,7 @@ export function ActivityLogs() {
                 items.map((item) => (
                   <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                     <td className="px-3 py-3 whitespace-nowrap text-zinc-500">
-                      {item.createdAt ? new Date(item.createdAt).toLocaleString() : "—"}
+                      {formatPakistanDateTime(item.createdAt)}
                     </td>
                     <td className="px-3 py-3">
                       <div className="font-medium">{item.userName || "System"}</div>
@@ -219,7 +221,7 @@ export function ActivityLogs() {
                     <td className="px-3 py-3">{item.shopName || "—"}</td>
                     <td className="px-3 py-3">{item.module || item.entity || "—"}</td>
                     <td className="px-3 py-3 font-mono text-xs">{item.action}</td>
-                    <td className="px-3 py-3 font-mono text-xs">{item.ip || "—"}</td>
+                    <td className="px-3 py-3 font-mono text-xs">{formatClientIpForDisplay(item.ip)}</td>
                     <td className="px-3 py-3">{item.browser || "—"}</td>
                     <td className="px-3 py-3">{item.device || "—"}</td>
                     <td className="px-3 py-3 max-w-xs truncate" title={item.description}>

@@ -8,6 +8,8 @@ import {
   MOBILE_PLACEHOLDER,
   formatCnicInput,
   formatMobileInput,
+  formatPakistanIbanInput,
+  normalizeBankAccountNumber,
 } from "@/lib/pakistan-validators";
 
 function withFormattedChange(
@@ -36,6 +38,22 @@ export function bindMobileField<T extends FieldValues>(register: UseFormRegister
   };
 }
 
+export function bindBankAccountField<T extends FieldValues>(register: UseFormRegister<T>, name: FieldPath<T>) {
+  const { onChange, ...rest } = register(name);
+  return {
+    ...rest,
+    onChange: withFormattedChange(onChange, normalizeBankAccountNumber),
+  };
+}
+
+export function bindIbanField<T extends FieldValues>(register: UseFormRegister<T>, name: FieldPath<T>) {
+  const { onChange, ...rest } = register(name);
+  return {
+    ...rest,
+    onChange: withFormattedChange(onChange, formatPakistanIbanInput),
+  };
+}
+
 export function CnicInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <Input
@@ -58,6 +76,20 @@ export function MobileInput(props: InputHTMLAttributes<HTMLInputElement>) {
       autoComplete="tel-national"
       placeholder={MOBILE_PLACEHOLDER}
       maxLength={12}
+      {...props}
+    />
+  );
+}
+
+export function IbanInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <Input
+      type="text"
+      inputMode="text"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="PK00XXXX0000000000000000"
+      maxLength={24}
       {...props}
     />
   );

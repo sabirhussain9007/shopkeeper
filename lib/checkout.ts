@@ -2,11 +2,16 @@ import { connectDb } from "@/lib/db";
 import { withShopFilter } from "@/lib/tenant";
 import { Customer, LedgerEntry, Product, Sale, SaleItem } from "@/models";
 import type { SaleInput } from "@/types";
+import { pointsEarned } from "@/lib/customer-benefits";
 
 function creditAmount(sale: SaleInput) {
   if (sale.paymentMethod === "credit") return sale.grandTotal;
   if (sale.paymentMethod === "split") return Math.max(sale.grandTotal - sale.paidAmount, 0);
   return 0;
+}
+
+function isCreditPayment(method: SaleInput["paymentMethod"]) {
+  return method === "credit" || method === "split";
 }
 
 export async function processCheckout(sale: SaleInput, cashierId: string, shopId: string) {
@@ -22,8 +27,17 @@ export async function processCheckout(sale: SaleInput, cashierId: string, shopId
     }
   }
 
-  if ((sale.paymentMethod === "credit" || sale.paymentMethod === "split") && creditDue > 0 && !sale.customer) {
+  if (isCreditPayment(sale.paymentMethod) && creditDue > 0 && !sale.customer) {
     return { ok: false as const, status: 422, error: "A customer is required for credit or split payments." };
+  }
+
+  const pointsRedeemed = sale.pointsRedeemed ?? 0;
+  if (sale.customer && pointsRedeemed > 0) {
+    const customer = await Customer.findOne(withShopFilter(shopId, { _id: sale.customer }));
+    if (!customer) return { ok: false as const, status: 404, error: "Customer not found" };
+    if ((customer.rewardPoints ?? 0) < pointsRedeemed) {
+      return { ok: false as const, status: 409, error: "Insufficient reward points." };
+    }
   }
 
   for (const item of sale.items) {
@@ -38,19 +52,27 @@ export async function processCheckout(sale: SaleInput, cashierId: string, shopId
     sale.items.map((item) => Product.updateOne(withShopFilter(shopId, { _id: item.product }), { $inc: { quantity: -item.quantity } })),
   );
 
-  if (sale.customer && creditDue > 0) {
-    const customer = await Customer.findOneAndUpdate(withShopFilter(shopId, { _id: sale.customer }), { $inc: { currentBalance: creditDue } }, { new: true });
-    await LedgerEntry.create({
-      shopId,
-      customer: sale.customer,
-      sale: createdSale._id,
-      type: "credit_sale",
-      debit: creditDue,
-      credit: 0,
-      balance: customer?.currentBalance ?? creditDue,
-      description: `Credit sale ${sale.invoiceNumber}`,
-      createdBy: cashierId,
-    });
+  if (sale.customer) {
+    const earned = pointsEarned(sale.grandTotal);
+    const pointDelta = earned - pointsRedeemed;
+    const customer = await Customer.findOneAndUpdate(
+      withShopFilter(shopId, { _id: sale.customer }),
+      { $inc: { currentBalance: creditDue, rewardPoints: pointDelta } },
+      { new: true },
+    );
+    if (creditDue > 0 && customer) {
+      await LedgerEntry.create({
+        shopId,
+        customer: sale.customer,
+        sale: createdSale._id,
+        type: "credit_sale",
+        debit: creditDue,
+        credit: 0,
+        balance: customer.currentBalance ?? creditDue,
+        description: `Credit sale ${sale.invoiceNumber}`,
+        createdBy: cashierId,
+      });
+    }
   }
 
   const { logActivity } = await import("@/lib/activity");
@@ -61,6 +83,23 @@ export async function processCheckout(sale: SaleInput, cashierId: string, shopId
     entity: "sale",
     entityId: String(createdSale._id),
     description: `Sale created: ${sale.invoiceNumber} — Rs. ${sale.grandTotal}`,
+  });
+
+  if (sale.couponCode) {
+    const { markCouponUsed } = await import("@/lib/coupons");
+    await markCouponUsed(shopId, sale.couponCode);
+  }
+
+  const { syncSaleAccounting } = await import("@/lib/accounting-sync");
+  await syncSaleAccounting(shopId, cashierId, {
+    id: String(createdSale._id),
+    invoiceNumber: sale.invoiceNumber,
+    grandTotal: sale.grandTotal,
+    paymentMethod: sale.paymentMethod,
+    paidAmount: sale.paidAmount ?? 0,
+    bankName: sale.bankName,
+    chequeNumber: sale.chequeNumber,
+    chequeDate: sale.chequeDate,
   });
 
   return { ok: true as const, sale: createdSale };

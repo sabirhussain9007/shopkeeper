@@ -57,5 +57,16 @@ export async function POST(req: NextRequest) {
     entityId: String(created._id),
     description: `Expense added: ${created.title} (${created.category}) — Rs. ${created.amount}`,
   });
+  const { syncExpenseAccounting } = await import("@/lib/accounting-sync");
+  await syncExpenseAccounting(
+    allowed.session.user.shopId!,
+    allowed.session.user.id,
+    String(created._id),
+    created.title,
+    created.amount,
+    created.paymentMethod ?? "cash",
+    created.reference ?? "",
+    created.bankName ?? "",
+  );
   return NextResponse.json(created, { status: 201 });
 }

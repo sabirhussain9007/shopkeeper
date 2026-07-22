@@ -9,7 +9,9 @@ export async function GET(req: NextRequest) {
 
   const page = Number(req.nextUrl.searchParams.get("page") ?? 1);
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 20);
-  const data = await listPurchases(page, limit, allowed.session.user.shopId!);
+  const kindParam = req.nextUrl.searchParams.get("kind");
+  const kind = kindParam === "spot" ? "spot" : "order";
+  const data = await listPurchases(page, limit, allowed.session.user.shopId!, kind);
   return NextResponse.json(data);
 }
 

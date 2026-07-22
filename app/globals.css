@@ -35,3 +35,46 @@ body {
     background-color: #ffffff;
   }
 }
+
+@layer components {
+  .responsive-table-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0.75rem;
+    border: 1px solid #e4e4e7;
+    background-color: #ffffff;
+  }
+
+  .responsive-table-shell--2xl {
+    border-radius: 1rem;
+  }
+
+  .responsive-table-shell--nested {
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+  }
+
+  .responsive-table-shell > table {
+    width: 100%;
+    min-width: 42rem;
+    text-align: left;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .responsive-table-shell--md > table {
+    min-width: 44rem;
+  }
+
+  .responsive-table-shell--lg > table {
+    min-width: 56rem;
+  }
+
+  .responsive-table-shell--xl > table {
+    min-width: 68.75rem;
+  }
+}

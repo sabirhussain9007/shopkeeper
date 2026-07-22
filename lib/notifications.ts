@@ -1,7 +1,8 @@
 import { Types } from "mongoose";
 import { connectDb } from "@/lib/db";
+import { pakistanTodayKey } from "@/lib/datetime";
 import { getExpiryWarningLabel, getRemainingDays, shouldBlinkExpiry } from "@/lib/saas";
-import { Notification, Shop, User } from "@/models";
+import { Notification, Product, Shop, User } from "@/models";
 
 export async function createNotification(input: {
   shopId?: string | null;
@@ -78,7 +79,7 @@ export async function markAllNotificationsRead(params: { userId?: string | null;
 export async function syncSubscriptionNotifications() {
   await connectDb();
   const shops = await Shop.find({ status: { $in: ["active", "expired"] }, expiresAt: { $exists: true } }).lean();
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = pakistanTodayKey();
 
   for (const shop of shops) {
     const remaining = getRemainingDays(shop.expiresAt);
@@ -116,5 +117,49 @@ export async function syncSubscriptionNotifications() {
       category,
       metadata: { day: todayKey, remainingDays: remaining, shopName: shop.name },
     });
+  }
+}
+
+/** Notify shop about low stock and expiring products (once per day). */
+export async function syncInventoryAlerts(shopId: string) {
+  await connectDb();
+  const todayKey = pakistanTodayKey();
+  const base = { shopId, deletedAt: { $exists: false } };
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 14);
+
+  const [lowStock, expiring] = await Promise.all([
+    Product.countDocuments({ ...base, $expr: { $lte: ["$quantity", "$reorderLevel"] } }),
+    Product.countDocuments({ ...base, expiryDate: { $lte: soon, $gte: new Date() } }),
+  ]);
+
+  if (lowStock > 0) {
+    const category = `low-stock-${todayKey}`;
+    const exists = await Notification.exists({ shopId, category });
+    if (!exists) {
+      await createNotification({
+        shopId,
+        audience: "shop",
+        title: "Low stock alert",
+        message: `${lowStock} product(s) are at or below reorder level.`,
+        type: "warning",
+        category,
+      });
+    }
+  }
+
+  if (expiring > 0) {
+    const category = `expiring-${todayKey}`;
+    const exists = await Notification.exists({ shopId, category });
+    if (!exists) {
+      await createNotification({
+        shopId,
+        audience: "shop",
+        title: "Expiring products",
+        message: `${expiring} product(s) expire within 14 days.`,
+        type: "warning",
+        category,
+      });
+    }
   }
 }

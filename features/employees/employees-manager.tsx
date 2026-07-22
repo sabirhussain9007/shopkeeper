@@ -23,7 +23,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { useCrud } from "@/hooks/use-crud";
 import { CnicInput, MobileInput, bindCnicField, bindMobileField } from "@/components/ui/pakistan-fields";
 import { formatCnicInput, formatMobileInput } from "@/lib/pakistan-validators";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanDateInput } from "@/lib/utils";
 import { employeeSchema } from "@/schemas/domain";
 import type { EmployeeInput } from "@/types";
 
@@ -45,10 +45,7 @@ const formSchema = employeeSchema;
 type FormValues = z.input<typeof formSchema>;
 
 function toDateInput(value?: Date | string | null) {
-  if (!value) return "";
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return formatPakistanDateInput(value);
 }
 
 const emptyValues: FormValues = {
@@ -189,7 +186,7 @@ export function EmployeesManager() {
 
       <Surface>
         <DataToolbar placeholder="Search employees" status={params.status} onSearch={onSearch} onStatusChange={onStatusChange} />
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>

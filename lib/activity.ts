@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import type { NextRequest } from "next/server";
 import { connectDb } from "@/lib/db";
-import { getClientDeviceInfo, type ClientDeviceInfo } from "@/lib/request-meta";
+import { getClientDeviceInfo, type ClientDeviceInfo, type HeaderSource } from "@/lib/request-meta";
 import { ActivityLog, Shop } from "@/models";
 import type { Role } from "@/types";
 
@@ -22,7 +22,7 @@ export type LogActivityInput = {
   browser?: string;
   device?: string;
   userAgent?: string;
-  req?: NextRequest | Request | null;
+  req?: NextRequest | Request | { headers?: HeaderSource } | null;
 };
 
 const MODULE_BY_ENTITY: Record<string, string> = {
@@ -82,7 +82,7 @@ export async function logActivity(input: LogActivityInput) {
       entityId: input.entityId ?? "",
       description: input.description,
       metadata: input.metadata ?? {},
-      ip: input.ip || deviceInfo.ip || "",
+      ip: input.ip?.trim() || deviceInfo.ip?.trim() || "unknown",
       browser: input.browser || deviceInfo.browser || "",
       device: input.device || deviceInfo.device || "",
       userAgent: input.userAgent || deviceInfo.userAgent || "",
@@ -167,9 +167,10 @@ export async function listActivityLogs(
     ActivityLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     ActivityLog.countDocuments(filter),
     ActivityLog.aggregate([
-      { $match: { shopId: new Types.ObjectId(shopId) } },
-      { $group: { _id: { userId: "$userId", userName: "$userName" } } },
-      { $sort: { "_id.userName": 1 } },
+      { $match: { shopId: new Types.ObjectId(shopId), userId: { $ne: null } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: "$userId", name: { $first: "$userName" } } },
+      { $sort: { name: 1 } },
       { $limit: 100 },
     ]),
     ActivityLog.distinct("module", { shopId: new Types.ObjectId(shopId) }),
@@ -181,9 +182,10 @@ export async function listActivityLogs(
     page,
     pages: Math.ceil(total / limit) || 1,
     filters: {
-      users: users
-        .filter((u) => u._id?.userId)
-        .map((u) => ({ id: String(u._id.userId), name: u._id.userName || "User" })),
+      users: users.map((u) => ({
+        id: String(u._id),
+        name: (u.name as string) || "User",
+      })),
       modules: (modules as string[]).filter(Boolean).sort(),
       actions: (actions as string[]).filter(Boolean).sort(),
     },

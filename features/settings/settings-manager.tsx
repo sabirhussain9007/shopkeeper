@@ -24,13 +24,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { settingsSchema } from "@/schemas/domain";
 import { MobileInput, bindMobileField } from "@/components/ui/pakistan-fields";
 import { formatMobileInput } from "@/lib/pakistan-validators";
+import { pakistanTodayKey } from "@/lib/utils";
 import { DEFAULT_CASHIER_ROUTES, DEFAULT_MANAGER_ROUTES, NAV_ROUTES, type NavRouteId } from "@/lib/nav-access";
 import { shopRoles, type ShopRole, type SettingsInput } from "@/types";
 
 type SettingsRecord = SettingsInput & { _id: string | null };
 type SafeUser = { _id: string; name: string; email: string; role: ShopRole; status: "active" | "inactive" };
 
-const tabs = ["Business", "Receipt & Tax", "Access", "Users", "My Account", "Backup"] as const;
+const tabs = ["Business", "Receipt & Tax", "Localization", "Access", "Users", "My Account", "Backup"] as const;
 type Tab = (typeof tabs)[number];
 
 const formSchema = settingsSchema;
@@ -201,7 +202,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `shopkeeper-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `shopkeeper-settings-${pakistanTodayKey()}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -255,7 +256,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
         ))}
       </div>
 
-      {tab === "Business" || tab === "Receipt & Tax" ? (
+      {tab === "Business" || tab === "Receipt & Tax" || tab === "Localization" ? (
         <form onSubmit={onSettingsSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
           <Surface className="space-y-4 p-6">
             {tab === "Business" ? (
@@ -333,7 +334,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                   </div>
                 </div>
               </>
-            ) : (
+            ) : tab === "Receipt & Tax" ? (
               <>
                 <h2 className="text-lg font-semibold">Receipt & tax</h2>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -375,6 +376,31 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                   </div>
                 </div>
               </>
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold">Localization & appearance</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="timezone">Timezone</Label>
+                    <Input id="timezone" {...form.register("timezone")} placeholder="Asia/Karachi" />
+                  </div>
+                  <div>
+                    <Label htmlFor="language">Language</Label>
+                    <Select id="language" {...form.register("language")}>
+                      <option value="en">English</option>
+                      <option value="ur">Urdu</option>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="theme">Default theme</Label>
+                    <Select id="theme" {...form.register("theme")}>
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                      <option value="system">System</option>
+                    </Select>
+                  </div>
+                </div>
+              </>
             )}
             <Button type="submit" loading={saveSettings.isPending} loadingLabel="Saving...">
               <Save className="h-4 w-4" />
@@ -382,7 +408,9 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             </Button>
           </Surface>
 
-          <Surface className={`p-6 ${receiptSize === "a4" ? "lg:col-span-2" : ""}`}>
+          <Surface className={`p-6 ${tab === "Receipt & Tax" ? (receiptSize === "a4" ? "lg:col-span-2" : "") : "hidden"}`}>
+            {tab === "Receipt & Tax" ? (
+              <>
             <h3 className="mb-4 text-sm font-medium uppercase tracking-wide text-zinc-500">Receipt preview</h3>
             <div className="flex justify-center overflow-auto rounded-xl border border-zinc-200 bg-white p-4">
               <Receipt
@@ -409,6 +437,8 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                 issuedAt="13 Jun 2026, 06:30 PM"
               />
             </div>
+              </>
+            ) : null}
           </Surface>
         </form>
       ) : null}
@@ -422,7 +452,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             </p>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+          <div className="responsive-table-shell responsive-table-shell--2xl">
             <table className="min-w-full text-left text-sm text-zinc-950">
               <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-800">
                 <tr>
@@ -520,7 +550,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             </Button>
           </div>
           <DataToolbar placeholder="Search users..." onSearch={setUserSearch} />
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+          <div className="responsive-table-shell">
             <table className="min-w-full text-sm">
               <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                 <tr>

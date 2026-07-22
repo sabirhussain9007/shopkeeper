@@ -41,7 +41,7 @@ export default async function LandingPage() {
             <span className="block text-emerald-300">Own your till.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg text-emerald-50/75 md:text-xl">
-            POS, inventory, ledger, and reports for Pakistani retailers — activate a shop in minutes with EasyPaisa, JazzCash, or bank transfer.
+            POS, inventory, ledger, and reports for Pakistani retailers — activate a shop in minutes with bank transfer.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link

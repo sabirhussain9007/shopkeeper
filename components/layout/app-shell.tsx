@@ -22,6 +22,14 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     getActiveSettings(session.user.shopId),
     getShopById(session.user.shopId),
   ]);
+
+  try {
+    const { syncInventoryAlerts } = await import("@/lib/notifications");
+    await syncInventoryAlerts(session.user.shopId);
+  } catch {
+    // Non-blocking inventory alerts
+  }
+
   const role = session.user.role as Role;
   const allowedRoutes =
     role === "admin" || role === "manager" || role === "cashier"
@@ -44,7 +52,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         remainingDays={remainingDays}
       />
       <main className="relative z-0 mx-auto w-full min-w-0 max-w-7xl px-3 py-4 sm:px-4 md:p-8">
-        <AppPanel className="w-full min-w-0 overflow-hidden p-4 sm:p-6 md:p-8">
+        <AppPanel className="w-full min-w-0 p-4 sm:p-6 md:p-8">
           {remainingDays <= 3 ? (
             <SubscriptionExpiryBadge
               remainingDays={remainingDays}

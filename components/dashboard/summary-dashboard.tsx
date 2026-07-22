@@ -4,8 +4,6 @@ import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   AlertTriangle,
   Boxes,
@@ -22,14 +20,12 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Invoice } from "@/components/printing/invoice";
 import { Card, Surface } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { currency } from "@/lib/utils";
-
-type ChartPoint = { label: string; total: number };
+import { downloadInvoicePdf } from "@/lib/download-invoice-pdf";
+import { currency, formatPakistanDate, formatPakistanDateTime } from "@/lib/utils";
 
 type Summary = {
   todaySales: number;
@@ -52,11 +48,6 @@ type Summary = {
   yearlyProfit?: number;
   profitMargin?: number;
   expenseByCategory?: Array<{ category: string; total: number }>;
-  expenseTrend?: Array<{ label: string; total: number }>;
-  chartSales?: ChartPoint[];
-  chartProfit?: ChartPoint[];
-  chartAttendance?: ChartPoint[];
-  chartSalary?: ChartPoint[];
   remainingDays?: number;
   packageExpired?: boolean;
   packageStatus?: string;
@@ -102,76 +93,6 @@ type SaleDetail = {
   };
   items: SaleItem[];
 };
-
-function downloadInvoicePdf(detail: SaleDetail, business: BusinessSettings) {
-  const doc = new jsPDF();
-  const invoiceDate = detail.sale.createdAt ? new Date(detail.sale.createdAt).toLocaleString() : "";
-  const subtotal = detail.sale.subtotal ?? 0;
-  const discount = detail.sale.discountValue ?? 0;
-  const tax = detail.sale.taxTotal ?? 0;
-
-  doc.setFontSize(18);
-  doc.text(business.businessName, 14, 18);
-  doc.setFontSize(11);
-  doc.text("Tax Invoice", 14, 26);
-  let businessY = 34;
-  if (business.address) {
-    doc.text(business.address, 14, businessY);
-    businessY += 7;
-  }
-  if (business.phone) {
-    doc.text(`Phone: ${business.phone}`, 14, businessY);
-    businessY += 7;
-  }
-  if (business.email) {
-    doc.text(`Email: ${business.email}`, 14, businessY);
-    businessY += 7;
-  }
-  if (business.gstVatNumber) {
-    doc.text(`GST/VAT: ${business.gstVatNumber}`, 14, businessY);
-    businessY += 7;
-  }
-  if (business.ntn) {
-    doc.text(`NTN: ${business.ntn}`, 14, businessY);
-  }
-
-  doc.text(`Invoice: ${detail.sale.invoiceNumber}`, 140, 18);
-  doc.text(`Date: ${invoiceDate}`, 140, 26);
-  doc.text(`Customer: ${detail.sale.customer?.name ?? "Walk-in"}`, 140, 38);
-  doc.text(`Cashier: ${detail.sale.cashier?.name ?? "-"}`, 140, 46);
-  doc.text(`Payment: ${detail.sale.paymentMethod.toUpperCase()}`, 140, 54);
-  doc.text(`Status: ${detail.sale.status.toUpperCase()}`, 140, 62);
-
-  autoTable(doc, {
-    startY: Math.max(74, businessY + 8),
-    head: [["Item", "SKU", "Qty", "Price", "Total"]],
-    body: detail.items.map((item) => [
-      item.name,
-      item.sku ?? "",
-      item.quantity,
-      currency(item.unitPrice),
-      currency(item.lineTotal),
-    ]),
-  });
-
-  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 58;
-  autoTable(doc, {
-    startY: finalY + 8,
-    theme: "plain",
-    styles: { halign: "right" },
-    margin: { left: 120 },
-    body: [
-      ["Subtotal", currency(subtotal)],
-      ["Discount", currency(discount)],
-      ["Tax", currency(tax)],
-      ["Grand Total", currency(detail.sale.grandTotal)],
-      ["Paid", currency(detail.sale.paidAmount ?? 0)],
-      ["Change", currency(detail.sale.changeDue ?? 0)],
-    ],
-  });
-
-  doc.save(`${detail.sale.invoiceNumber}.pdf`);
-}
 
 export function SummaryDashboard({ summary }: { summary: Summary }) {
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -229,10 +150,6 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
   const percentCardLabels = new Set(["Profit Margin %"]);
   const business = summary.settings ?? { businessName: "Shopkeeper" };
 
-  const expenseChartData =
-    (summary.expenseByCategory?.length ? summary.expenseByCategory.map((row) => ({ label: row.category, total: row.total })) : null) ??
-    (summary.expenseTrend?.length ? summary.expenseTrend : null);
-
   const printInvoice = useReactToPrint({
     contentRef: invoiceRef,
     documentTitle: selectedInvoice?.sale.invoiceNumber ?? "invoice",
@@ -265,7 +182,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
   const onDownloadInvoice = async (saleId: string) => {
     const detail = await loadSaleDetail(saleId, "download");
     if (!detail) return;
-    downloadInvoicePdf(detail, business);
+    await downloadInvoicePdf(detail, business);
   };
 
   return (
@@ -294,7 +211,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
               <h2 className="text-xl font-semibold">Recent Sales</h2>
               <p className="text-sm text-zinc-500">Latest invoices recorded in the system.</p>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+            <div className="responsive-table-shell">
               <table className="min-w-full text-sm">
                 <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                   <tr>
@@ -317,7 +234,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                     summary.recentSales!.map((sale) => (
                       <tr key={sale._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
                         <td className="px-4 py-3 font-medium">{sale.invoiceNumber}</td>
-                        <td className="px-4 py-3 text-zinc-500">{sale.createdAt ? new Date(sale.createdAt).toLocaleDateString() : "-"}</td>
+                        <td className="px-4 py-3 text-zinc-500">{formatPakistanDate(sale.createdAt, "-")}</td>
                         <td className="px-4 py-3 capitalize">{sale.paymentMethod}</td>
                         <td className="px-4 py-3">
                           <Badge variant={sale.status === "completed" ? "success" : sale.status === "refunded" ? "warning" : "default"}>{sale.status}</Badge>
@@ -360,7 +277,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
               <h2 className="text-xl font-semibold">Top Products</h2>
               <p className="text-sm text-zinc-500">Best sellers by revenue.</p>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
+            <div className="responsive-table-shell">
               <table className="min-w-full text-sm">
                 <thead className="border-b border-zinc-100 bg-[var(--panel)] text-left text-zinc-600">
                   <tr>
@@ -390,103 +307,6 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
             </div>
           </Surface>
 
-          {summary.chartSales?.length ? (
-            <Surface>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">Sales (6 Months)</h2>
-                <p className="text-sm text-zinc-500">Completed sales totals by month.</p>
-              </div>
-              <div className="h-64 min-w-0 w-full overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.chartSales}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} />
-                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
-                    <Bar dataKey="total" fill="#34d399" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          ) : null}
-
-          {expenseChartData ? (
-            <Surface>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">
-                  {summary.expenseByCategory?.length ? "Expenses by Category" : "Expense Trend"}
-                </h2>
-                <p className="text-sm text-zinc-500">Monthly expense breakdown.</p>
-              </div>
-              <div className="h-64 min-w-0 w-full overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={expenseChartData}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} />
-                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
-                    <Bar dataKey="total" fill="#60a5fa" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          ) : null}
-
-          {summary.chartProfit?.length ? (
-            <Surface>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">Profit (6 Months)</h2>
-                <p className="text-sm text-zinc-500">Net profit by month.</p>
-              </div>
-              <div className="h-64 min-w-0 w-full overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.chartProfit}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} />
-                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
-                    <Bar dataKey="total" fill="#a78bfa" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          ) : null}
-
-          {summary.chartAttendance?.length ? (
-            <Surface>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">Attendance Today</h2>
-                <p className="text-sm text-zinc-500">Present, absent, leave, and late.</p>
-              </div>
-              <div className="h-64 min-w-0 w-full overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.chartAttendance}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="total" fill="#fbbf24" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          ) : null}
-
-          {summary.chartSalary?.length ? (
-            <Surface>
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold">Salary Status</h2>
-                <p className="text-sm text-zinc-500">Paid vs pending this month.</p>
-              </div>
-              <div className="h-64 min-w-0 w-full overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.chartSalary}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={48} />
-                    <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
-                    <Bar dataKey="total" fill="#f472b6" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Surface>
-          ) : null}
-
           {(summary.recentActivity?.length ?? 0) > 0 ? (
             <Surface>
               <div className="mb-4">
@@ -504,7 +324,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
                         </p>
                       </div>
                       <span className="shrink-0 text-xs text-zinc-400">
-                        {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
+                        {formatPakistanDateTime(item.createdAt, "")}
                       </span>
                     </div>
                   </li>
@@ -552,7 +372,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
             gstVatNumber={business.gstVatNumber}
             ntn={business.ntn}
             logo={business.logo}
-            date={selectedInvoice.sale.createdAt ? new Date(selectedInvoice.sale.createdAt).toLocaleString() : new Date().toLocaleString()}
+            date={formatPakistanDateTime(selectedInvoice.sale.createdAt ?? new Date())}
             cashierName={selectedInvoice.sale.cashier?.name}
             customerName={selectedInvoice.sale.customer?.name}
             items={selectedInvoice.items}

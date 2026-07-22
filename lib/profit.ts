@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import { connectDb } from "@/lib/db";
+import { pakistanStartOfDay, pakistanWeekStart, pakistanMonthStart, pakistanYearStart } from "@/lib/datetime";
 import { Expense, Salary, Sale, SaleItem } from "@/models";
 
 function rangeBounds(from: Date, to: Date) {
@@ -125,17 +126,13 @@ export async function calculateProfit(shopId: string, from: Date, to: Date): Pro
 export function periodBounds(period: "today" | "week" | "month" | "year", now = new Date()) {
   const end = new Date(now);
   if (period === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { from: start, to: end };
+    return { from: pakistanStartOfDay(now), to: end };
   }
   if (period === "week") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 6);
-    start.setHours(0, 0, 0, 0);
-    return { from: start, to: end };
+    return { from: pakistanWeekStart(now), to: end };
   }
   if (period === "month") {
-    return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: end };
+    return { from: pakistanMonthStart(now), to: end };
   }
-  return { from: new Date(now.getFullYear(), 0, 1), to: end };
+  return { from: pakistanYearStart(now), to: end };
 }

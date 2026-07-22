@@ -6,6 +6,7 @@ import { connectDb } from "@/lib/db";
 import { getRoleLandingPath } from "@/lib/access";
 import { Shop } from "@/models";
 import { SuperAdminSignOut } from "@/features/saas/super-admin-signout";
+import { RenewShopForm } from "@/features/shop/renew-shop-form";
 import { PageBackground } from "@/components/layout/page-background";
 import type { Role } from "@/types";
 
@@ -57,6 +58,9 @@ export default async function ShopStatusPage() {
             </Link>
             <SuperAdminSignOut className="border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950" />
           </div>
+          {status === "expired" || status === "pending" ? (
+            <RenewShopForm defaultPlan={shop?.plan as "monthly" | "yearly" | undefined} />
+          ) : null}
         </div>
       </div>
     </main>

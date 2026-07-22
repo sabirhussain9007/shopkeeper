@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatPakistanDate, pakistanTodayKey } from "@/lib/utils";
 import { getExpiryWarningLabel, getExpiryWarningLevel, shouldBlinkExpiry } from "@/lib/saas";
 
 type Props = {
@@ -55,7 +55,7 @@ export function SubscriptionExpiryBadge({ remainingDays, planLabel, expiresAt, v
             <p className="font-semibold">{label}</p>
             <p className="mt-1 text-sm opacity-80">
               {planLabel ? `${planLabel} plan` : "Current plan"}
-              {expiresAt ? ` · expires ${new Date(expiresAt).toLocaleDateString()}` : ""}
+              {expiresAt ? ` · expires ${formatPakistanDate(expiresAt)}` : ""}
             </p>
           </div>
           {(level === "expired" || remainingDays <= 3) && (
@@ -87,7 +87,7 @@ export function SubscriptionExpiryBadge({ remainingDays, planLabel, expiresAt, v
 
 export function SubscriptionExpiryPopup({ remainingDays, planLabel }: { remainingDays: number; planLabel?: string }) {
   const blink = shouldBlinkExpiry(remainingDays);
-  const storageKey = `shop-expiry-popup-${new Date().toISOString().slice(0, 10)}`;
+  const storageKey = `shop-expiry-popup-${pakistanTodayKey()}`;
   const [dismissed, setDismissed] = useState(false);
 
   const alreadyShown = useSyncExternalStore(

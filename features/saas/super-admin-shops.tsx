@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NotificationCenter } from "@/components/saas/notification-center";
 import { TableLoader } from "@/components/ui/loader";
-import { cn } from "@/lib/utils";
+import { cn, formatPakistanDate } from "@/lib/utils";
 
 type ShopRow = {
   _id: string;
@@ -51,8 +51,7 @@ const EXPIRY_FILTERS: Array<{ label: string; value: string }> = [
 ];
 
 function formatDate(value?: string) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString();
+  return formatPakistanDate(value);
 }
 
 export function SuperAdminShops() {
@@ -174,7 +173,7 @@ export function SuperAdminShops() {
         <p className="text-sm text-red-600">{shopsQuery.error instanceof Error ? shopsQuery.error.message : "Failed to load shops"}</p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+      <div className="responsive-table-shell responsive-table-shell--2xl">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-zinc-100 bg-[var(--panel)] text-xs uppercase tracking-wide text-zinc-500">
             <tr>

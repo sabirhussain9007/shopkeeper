@@ -7,7 +7,7 @@ import { getSalaryDashboard } from "@/lib/salaries";
 import { listActivityLogs } from "@/lib/activity";
 import { getRemainingDays } from "@/lib/saas";
 import { withShopFilter } from "@/lib/tenant";
-import { Customer, Employee, Product, Sale, SaleItem, Setting, Shop } from "@/models";
+import { Customer, Employee, Product, Sale, SaleItem, Setting, Shop, Supplier } from "@/models";
 
 type RecentSaleRow = {
   _id: unknown;
@@ -18,10 +18,6 @@ type RecentSaleRow = {
   createdAt?: Date;
 };
 
-function monthLabel(year: number, month: number) {
-  return `${month}/${year}`;
-}
-
 export async function getDashboardSummary(shopId: string) {
   await connectDb();
   const now = new Date();
@@ -29,7 +25,6 @@ export async function getDashboardSummary(shopId: string) {
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const shopOid = new Types.ObjectId(shopId);
   const baseMatch = { shopId: shopOid, deletedAt: { $exists: false } };
-  const sixMonthsStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
   const todayBounds = periodBounds("today", now);
   const weekBounds = periodBounds("week", now);
@@ -57,7 +52,9 @@ export async function getDashboardSummary(shopId: string) {
     expenseDash,
     employeeCount,
     recentActivity,
-    salesByMonth,
+    outOfStockCount,
+    inventoryValueAgg,
+    supplierCount,
   ] = await Promise.all([
     Sale.aggregate([
       { $match: { ...baseMatch, createdAt: { $gte: dayStart, $lte: now }, status: "completed" } },
@@ -97,38 +94,10 @@ export async function getDashboardSummary(shopId: string) {
     getExpenseDashboard(shopId, now),
     Employee.countDocuments({ ...baseMatch, status: "active" }),
     listActivityLogs(shopId, { page: 1, limit: 8 }),
-    Sale.aggregate([
-      { $match: { ...baseMatch, createdAt: { $gte: sixMonthsStart, $lte: now }, status: "completed" } },
-      {
-        $group: {
-          _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
-          total: { $sum: "$grandTotal" },
-        },
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1 } },
-    ]),
+    Product.countDocuments({ ...baseMatch, quantity: 0 }),
+    Product.aggregate([{ $match: baseMatch }, { $group: { _id: null, value: { $sum: { $multiply: ["$quantity", "$purchasePrice"] } } } }]),
+    Supplier.countDocuments(baseMatch),
   ]);
-
-  const monthSlots = Array.from({ length: 6 }, (_, idx) => {
-    const i = 5 - idx;
-    const cursor = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const year = cursor.getFullYear();
-    const month = cursor.getMonth() + 1;
-    const from = new Date(year, month - 1, 1);
-    const to = i === 0 ? now : new Date(year, month, 0, 23, 59, 59, 999);
-    return { year, month, label: monthLabel(year, month), from, to };
-  });
-
-  const monthProfits = await Promise.all(monthSlots.map((slot) => calculateProfit(shopId, slot.from, slot.to)));
-
-  const chartSales = monthSlots.map((slot) => {
-    const salesRow = salesByMonth.find((row) => row._id.year === slot.year && row._id.month === slot.month);
-    return { label: slot.label, total: (salesRow?.total as number | undefined) ?? 0 };
-  });
-  const chartProfit = monthSlots.map((slot, index) => ({
-    label: slot.label,
-    total: monthProfits[index]?.profit ?? 0,
-  }));
 
   const remainingDays = getRemainingDays(shop?.expiresAt);
   const packageExpired = !Number.isFinite(remainingDays) || remainingDays < 0;
@@ -145,6 +114,9 @@ export async function getDashboardSummary(shopId: string) {
     productCount,
     customerCount,
     lowStockCount,
+    outOfStockCount,
+    inventoryValue: inventoryValueAgg[0]?.value ?? 0,
+    supplierCount,
     employeeCount,
     presentToday: attendance.today.present,
     absentToday: attendance.today.absent,
@@ -157,19 +129,6 @@ export async function getDashboardSummary(shopId: string) {
     profitMargin: monthProfit.margin,
     profitBreakdown: monthProfit,
     expenseByCategory: expenseDash.byCategory,
-    expenseTrend: expenseDash.trend,
-    chartSales,
-    chartProfit,
-    chartAttendance: [
-      { label: "Present", total: attendance.today.present },
-      { label: "Absent", total: attendance.today.absent },
-      { label: "Leave", total: attendance.today.leave },
-      { label: "Late", total: attendance.today.late },
-    ],
-    chartSalary: [
-      { label: "Paid", total: salaryDash.totalPaid },
-      { label: "Pending", total: salaryDash.totalPending },
-    ],
     remainingDays: Number.isFinite(remainingDays) ? remainingDays : -1,
     packageExpired,
     packageStatus: packageExpired ? "expired" : remainingDays <= 3 ? "expiring" : "active",

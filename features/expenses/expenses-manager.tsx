@@ -7,7 +7,6 @@ import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
 import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +19,13 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrud } from "@/hooks/use-crud";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanDateInput } from "@/lib/utils";
 import { expenseCategories, expenseSchema } from "@/schemas/domain";
 import { exportRowsToExcel, exportRowsToPdf } from "@/services/report-export";
 import type { ExpenseInput } from "@/types";
+import { PaymentMethodAccountSelect } from "@/components/payment/payment-method-account-select";
+import { useShopPaymentAccounts } from "@/hooks/use-shop-payment-accounts";
+import { findAccountPaymentValue, resolvePaymentSelection } from "@/lib/payment-accounts";
 
 type Expense = ExpenseInput & { _id: string; expenseDate?: string | Date };
 
@@ -32,17 +34,13 @@ type ExpenseDashboard = {
   month: number;
   year: number;
   byCategory: Array<{ category: string; total: number }>;
-  trend?: Array<{ label: string; total: number }>;
 };
 
 const formSchema = expenseSchema;
 type FormValues = z.input<typeof formSchema>;
 
 function toDateInput(value?: Date | string | null) {
-  if (!value) return "";
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return formatPakistanDateInput(value);
 }
 
 const emptyValues: FormValues = {
@@ -51,6 +49,7 @@ const emptyValues: FormValues = {
   amount: 0,
   expenseDate: new Date(),
   paymentMethod: "cash",
+  bankName: "",
   reference: "",
   notes: "",
   status: "active",
@@ -61,6 +60,10 @@ export function ExpensesManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [expensePaymentSelection, setExpensePaymentSelection] = useState("cash");
+
+  const paymentAccountsQuery = useShopPaymentAccounts({ enabled: dialogOpen });
+  const paymentAccounts = paymentAccountsQuery.data?.items ?? [];
 
   const dashboard = useQuery({
     queryKey: ["expenses", "dashboard"],
@@ -75,18 +78,22 @@ export function ExpensesManager() {
 
   const openCreate = () => {
     setEditing(null);
+    setExpensePaymentSelection("cash");
     form.reset({ ...emptyValues, expenseDate: new Date() });
     setDialogOpen(true);
   };
 
   const openEdit = (item: Expense) => {
     setEditing(item);
+    const accountMatch = findAccountPaymentValue(paymentAccounts, item.paymentMethod, item.bankName);
+    setExpensePaymentSelection(accountMatch ?? item.paymentMethod);
     form.reset({
       category: item.category,
       title: item.title,
       amount: item.amount,
       expenseDate: item.expenseDate ? new Date(item.expenseDate) : new Date(),
       paymentMethod: item.paymentMethod,
+      bankName: item.bankName ?? "",
       reference: item.reference ?? "",
       notes: item.notes ?? "",
       status: item.status,
@@ -103,7 +110,12 @@ export function ExpensesManager() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const payload = formSchema.parse(values);
+      const resolved = resolvePaymentSelection(expensePaymentSelection, paymentAccounts);
+      const payload = formSchema.parse({
+        ...values,
+        paymentMethod: resolved.paymentMethod as FormValues["paymentMethod"],
+        bankName: resolved.bankName,
+      });
       if (editing) {
         await update.mutateAsync({ id: editing._id, input: payload });
         toast.success("Expense updated.");
@@ -191,7 +203,7 @@ export function ExpensesManager() {
       {(d?.byCategory?.length ?? 0) > 0 ? (
         <Surface>
           <h3 className="mb-4 text-lg font-semibold">By Category (This Month)</h3>
-          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+          <div className="responsive-table-shell">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                 <tr>
@@ -208,23 +220,6 @@ export function ExpensesManager() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </Surface>
-      ) : null}
-
-      {(d?.trend?.length ?? 0) > 0 ? (
-        <Surface>
-          <h3 className="mb-4 text-lg font-semibold">Expense Trend</h3>
-          <p className="mb-4 text-sm text-zinc-500">Last 6 months of operating costs.</p>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={d!.trend}>
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} width={48} />
-                <Tooltip formatter={(value) => currency(Number(value ?? 0))} />
-                <Bar dataKey="total" fill="#34d399" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
           </div>
         </Surface>
       ) : null}
@@ -247,7 +242,7 @@ export function ExpensesManager() {
             ))}
           </Select>
         </div>
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
@@ -338,13 +333,19 @@ export function ExpensesManager() {
               </div>
               <div>
                 <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select id="paymentMethod" className="mt-1.5" {...form.register("paymentMethod")}>
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank</option>
-                  <option value="easypaisa">Easypaisa</option>
-                  <option value="jazzcash">JazzCash</option>
-                  <option value="other">Other</option>
-                </Select>
+                <PaymentMethodAccountSelect
+                  id="paymentMethod"
+                  className="mt-1.5"
+                  value={expensePaymentSelection}
+                  onChange={setExpensePaymentSelection}
+                  accounts={paymentAccounts}
+                  accountsLoading={paymentAccountsQuery.isLoading}
+                  baseMethods={[
+                    { value: "cash", label: "Cash" },
+                    { value: "other", label: "Other" },
+                  ]}
+                  emptyAccountsHint="Add bank accounts under Finance → Bank."
+                />
               </div>
               <div>
                 <Label htmlFor="reference">Reference</Label>

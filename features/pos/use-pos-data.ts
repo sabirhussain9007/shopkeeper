@@ -30,7 +30,7 @@ export function usePosCustomers() {
     queryFn: async () => {
       const response = await fetch("/api/pos/customers");
       if (!response.ok) throw new Error("Unable to load customers");
-      return response.json() as Promise<{ items: Array<{ _id: string; name: string; phone: string; creditLimit: number; currentBalance?: number }> }>;
+      return response.json() as Promise<{ items: Array<{ _id: string; name: string; phone: string; creditLimit: number; currentBalance?: number; rewardPoints?: number; groupDiscountPercent?: number }> }>;
     },
     staleTime: 30_000,
   });

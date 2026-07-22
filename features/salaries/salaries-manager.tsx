@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanMonth, formatPakistanMonthYear } from "@/lib/utils";
 import { salarySchema } from "@/schemas/domain";
 import type { EmployeeInput, SalaryInput } from "@/types";
 
@@ -85,7 +85,7 @@ function computeNet(parts: {
 }
 
 function monthLabel(month: number, year: number) {
-  return new Date(year, month - 1, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+  return formatPakistanMonthYear(month, year);
 }
 
 function downloadSalarySlip(row: SalaryRow) {
@@ -367,7 +367,7 @@ export function SalariesManager() {
               <option value="">All months</option>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>
-                  {new Date(2000, m - 1, 1).toLocaleString(undefined, { month: "long" })}
+                  {formatPakistanMonth(new Date(2000, m - 1, 1))}
                 </option>
               ))}
             </Select>
@@ -397,7 +397,7 @@ export function SalariesManager() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
@@ -484,7 +484,7 @@ export function SalariesManager() {
                 <Select id="month" className="mt-1.5" {...form.register("month", { valueAsNumber: true })}>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                     <option key={m} value={m}>
-                      {new Date(2000, m - 1, 1).toLocaleString(undefined, { month: "long" })}
+                      {formatPakistanMonth(new Date(2000, m - 1, 1))}
                     </option>
                   ))}
                 </Select>
@@ -558,7 +558,7 @@ export function SalariesManager() {
                 <Select id="genMonth" className="mt-1.5" value={String(genMonth)} onChange={(e) => setGenMonth(Number(e.target.value))}>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                     <option key={m} value={m}>
-                      {new Date(2000, m - 1, 1).toLocaleString(undefined, { month: "long" })}
+                      {formatPakistanMonth(new Date(2000, m - 1, 1))}
                     </option>
                   ))}
                 </Select>

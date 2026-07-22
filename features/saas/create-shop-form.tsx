@@ -4,34 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, BadgeCheck, Building2, Clock, Receipt, ShieldCheck, Smartphone, Store, Wallet } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, Clock, Receipt, ShieldCheck, Store, Wallet } from "lucide-react";
 import { Loader } from "@/components/ui/loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createShopSchema } from "@/schemas/domain";
 import { MobileInput, formatMobileOnInput } from "@/components/ui/pakistan-fields";
 import { MOBILE_PLACEHOLDER } from "@/lib/pakistan-validators";
-import { SHOP_PLANS, type ShopPaymentMethod, type ShopPlanId } from "@/lib/saas";
+import { SHOP_PLANS, type ShopPlanId } from "@/lib/saas";
 import { cn } from "@/lib/utils";
 
 type PricingResponse = {
   paymentAccounts: {
-    easypaisa: string;
-    jazzcash: string;
     bank: { bankName: string; accountTitle: string; accountNumber: string };
   };
-};
-
-const paymentLabels: Record<ShopPaymentMethod, string> = {
-  easypaisa: "EasyPaisa",
-  jazzcash: "JazzCash",
-  bank: "Bank",
-};
-
-const paymentIcons: Record<ShopPaymentMethod, typeof Wallet> = {
-  easypaisa: Smartphone,
-  jazzcash: Wallet,
-  bank: Building2,
 };
 
 const steps = [
@@ -44,7 +30,6 @@ export function CreateShopForm() {
   const router = useRouter();
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
   const [plan, setPlan] = useState<ShopPlanId>("monthly");
-  const [paymentMethod, setPaymentMethod] = useState<ShopPaymentMethod>("easypaisa");
   const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
@@ -66,7 +51,7 @@ export function CreateShopForm() {
       password: String(form.get("password") ?? ""),
       confirmPassword: String(form.get("confirmPassword") ?? ""),
       plan,
-      paymentMethod,
+      paymentMethod: "bank" as const,
       paymentReference: String(form.get("paymentReference") ?? ""),
     };
 
@@ -96,7 +81,6 @@ export function CreateShopForm() {
 
   const accounts = pricing?.paymentAccounts;
   const selectedPlan = SHOP_PLANS[plan];
-  const PaymentIcon = paymentIcons[paymentMethod];
 
   return (
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f2420]/95 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl">
@@ -225,43 +209,20 @@ export function CreateShopForm() {
         </section>
 
         <section>
-          <h2 className="font-[family-name:var(--font-landing-display)] text-2xl">How will you pay?</h2>
-          <p className="mb-4 text-sm text-zinc-500">Transfer Rs. {selectedPlan.amount} outside the app, then submit your TID.</p>
-
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            {(Object.keys(paymentLabels) as ShopPaymentMethod[]).map((method) => {
-              const Icon = paymentIcons[method];
-              const selected = paymentMethod === method;
-              return (
-                <button
-                  key={method}
-                  type="button"
-                  onClick={() => setPaymentMethod(method)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition",
-                    selected ? "border-emerald-600 bg-emerald-50 text-emerald-950" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300",
-                  )}
-                >
-                  <span className={cn("grid h-10 w-10 place-items-center rounded-xl", selected ? "bg-emerald-500 text-zinc-950" : "bg-zinc-100 text-zinc-600")}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="text-sm font-semibold">{paymentLabels[method]}</span>
-                </button>
-              );
-            })}
-          </div>
+          <h2 className="font-[family-name:var(--font-landing-display)] text-2xl">Bank transfer</h2>
+          <p className="mb-4 text-sm text-zinc-500">Transfer Rs. {selectedPlan.amount} to the bank account below, then submit your TID.</p>
 
           <div className="rounded-[1.5rem] border border-emerald-900/10 bg-[#0f2420] p-5 text-white md:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-start gap-3">
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-400 text-[#0c1f1a]">
-                  <PaymentIcon className="h-5 w-5" />
+                  <Building2 className="h-5 w-5" />
                 </span>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Send payment to</p>
                   <p className="mt-1 font-[family-name:var(--font-landing-display)] text-2xl">
                     Rs. {selectedPlan.amount}
-                    <span className="ml-2 text-base font-normal text-emerald-100/60">· {paymentLabels[paymentMethod]}</span>
+                    <span className="ml-2 text-base font-normal text-emerald-100/60">· Bank transfer</span>
                   </p>
                 </div>
               </div>
@@ -269,19 +230,7 @@ export function CreateShopForm() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 font-mono text-sm">
-              {accounts && paymentMethod === "easypaisa" && (
-                <p>
-                  <span className="text-emerald-300/70">EasyPaisa</span>
-                  <span className="ml-3 text-lg tracking-wide text-white">{accounts.easypaisa}</span>
-                </p>
-              )}
-              {accounts && paymentMethod === "jazzcash" && (
-                <p>
-                  <span className="text-emerald-300/70">JazzCash</span>
-                  <span className="ml-3 text-lg tracking-wide text-white">{accounts.jazzcash}</span>
-                </p>
-              )}
-              {accounts && paymentMethod === "bank" && (
+              {accounts ? (
                 <div className="space-y-1.5">
                   <p>
                     <span className="text-emerald-300/70">Bank</span>
@@ -296,8 +245,9 @@ export function CreateShopForm() {
                     <span className="ml-3 text-lg tracking-wide text-white">{accounts.bank.accountNumber}</span>
                   </p>
                 </div>
+              ) : (
+                <Loader label="Loading bank account…" variant="inline" className="text-emerald-100/60" />
               )}
-              {!accounts && <Loader label="Loading payment account…" variant="inline" className="text-emerald-100/60" />}
             </div>
           </div>
 

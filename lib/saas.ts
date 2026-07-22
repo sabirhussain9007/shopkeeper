@@ -19,7 +19,7 @@ export const SHOP_PLANS = {
 } as const;
 
 export type ShopPlanId = keyof typeof SHOP_PLANS;
-export type ShopPaymentMethod = "easypaisa" | "jazzcash" | "bank";
+export type ShopPaymentMethod = "bank";
 export type ShopStatus = "pending" | "active" | "expired" | "suspended" | "rejected";
 export type ShopPaymentStatus = "pending" | "approved" | "rejected";
 

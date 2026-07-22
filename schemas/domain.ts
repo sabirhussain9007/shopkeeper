@@ -2,9 +2,15 @@ import { z } from "zod";
 import {
   CNIC_ERROR,
   MOBILE_ERROR,
+  BANK_ACCOUNT_ERROR,
+  IBAN_ERROR,
+  isValidBankAccountNumber,
   isValidCnic,
+  isValidPakistanIban,
   isValidPakistanMobile,
+  normalizeBankAccountNumber,
   normalizeCnic,
+  normalizePakistanIban,
   normalizePakistanMobile,
 } from "@/lib/pakistan-validators";
 import { permissions, shopRoles } from "@/types";
@@ -76,7 +82,7 @@ export const createShopSchema = z
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
     plan: z.enum(["monthly", "yearly"]),
-    paymentMethod: z.enum(["easypaisa", "jazzcash", "bank"]),
+    paymentMethod: z.enum(["bank"]),
     paymentReference: z.string().min(3).max(120),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -87,6 +93,10 @@ export const createShopSchema = z
 export const categorySchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional().default(""),
+  parentId: objectId.optional(),
+  icon: z.string().max(80).optional().default(""),
+  image: z.string().max(2_500_000).optional().default(""),
+  sortOrder: z.coerce.number().int().default(0),
   status: status.default("active"),
 });
 
@@ -106,6 +116,8 @@ export const customerSchema = z.object({
   address: z.string().max(500).optional().default(""),
   creditLimit: money.default(0),
   openingBalance: z.coerce.number().default(0),
+  groupId: objectId.optional(),
+  rewardPoints: z.coerce.number().min(0).default(0),
   notes: z.string().max(1000).optional().default(""),
   status: status.default("active"),
 });
@@ -116,12 +128,18 @@ export const productSchema = z.object({
   barcode: z.string().max(80).optional().default(""),
   category: objectId.optional(),
   brand: z.string().max(120).optional().default(""),
+  brandId: objectId.optional(),
   unit: z.string().min(1).max(40).default("pcs"),
   purchasePrice: money,
+  costPrice: money.default(0),
   sellingPrice: money,
   taxRate: z.coerce.number().min(0).max(100).default(0),
   quantity: z.coerce.number().min(0).default(0),
   reorderLevel: z.coerce.number().min(0).default(5),
+  maxStock: z.coerce.number().min(0).default(0),
+  expiryDate: z.coerce.date().optional().nullable(),
+  qrCode: z.string().max(200).optional().default(""),
+  warehouse: objectId.optional(),
   supplier: objectId.optional(),
   productImage: z.string().url().optional().or(z.literal("")).default(""),
   description: z.string().max(1000).optional().default(""),
@@ -135,6 +153,14 @@ export const stockAdjustmentSchema = z.object({
   previousQuantity: z.coerce.number().min(0),
   newQuantity: z.coerce.number().min(0),
   reason: z.string().min(3).max(500),
+});
+
+export const buyStockSchema = z.object({
+  vendorId: objectId,
+  quantity: z.coerce.number().positive(),
+  unitCost: money,
+  paidAmount: money.default(0),
+  notes: z.string().max(500).optional().default(""),
 });
 
 const saleItemSchema = z.object({
@@ -161,9 +187,32 @@ export const saleSchema = z.object({
   grandTotal: money,
   paidAmount: money.default(0),
   changeDue: z.coerce.number().default(0),
-  paymentMethod: z.enum(["cash", "credit", "split"]),
+  paymentMethod: z.enum(["cash", "credit", "split", "card", "bank", "easypaisa", "jazzcash", "cheque"]),
   status: z.enum(["draft", "held", "completed", "void", "refunded"]).default("completed"),
   notes: z.string().max(1000).optional().default(""),
+  couponCode: z.string().max(40).optional().default(""),
+  pointsRedeemed: z.coerce.number().min(0).default(0),
+  groupDiscount: money.default(0),
+  chequeNumber: z.string().max(80).optional().default(""),
+  bankName: z.string().max(120).optional().default(""),
+  chequeDate: z.coerce.date().optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.paymentMethod === "bank" && !data.bankName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered payment account.", path: ["bankName"] });
+  }
+  if (data.paymentMethod !== "cheque") return;
+  if (!data.customer) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "A customer is required for cheque payment.", path: ["customer"] });
+  }
+  if (!data.chequeNumber?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required.", path: ["chequeNumber"] });
+  }
+  if (!data.bankName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Bank name is required for cheque payment.", path: ["bankName"] });
+  }
+  if (!data.chequeDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required.", path: ["chequeDate"] });
+  }
 });
 
 const purchaseItemSchema = z.object({
@@ -172,6 +221,12 @@ const purchaseItemSchema = z.object({
   quantity: z.coerce.number().positive(),
   cost: money,
   taxRate: z.coerce.number().min(0).max(100).default(0),
+  discountType: z.enum(["flat", "flat_per_piece", "percentage"]).default("flat"),
+  discountValue: money.default(0),
+  salesTaxType: z.enum(["flat", "percentage"]).default("percentage"),
+  salesTaxValue: money.default(0),
+  grossAmount: money.default(0),
+  netAmount: money.default(0),
   lineTotal: money,
 });
 
@@ -183,7 +238,186 @@ export const purchaseSchema = z.object({
   grandTotal: money,
   paidAmount: money.default(0),
   status: z.enum(["ordered", "received", "cancelled"]).default("ordered"),
+  purchaseKind: z.enum(["order", "spot"]).default("order"),
+  orderDate: z.coerce.date().optional(),
+  invoiceNumber: z.string().max(80).optional().default(""),
+  discountType: z.enum(["flat", "percentage"]).default("flat"),
+  discountValue: money.default(0),
+  salesTaxType: z.enum(["flat", "percentage"]).default("flat"),
+  salesTaxValue: money.default(0),
+  paymentMethod: z.enum(["cash", "cheque", "credit"]).default("cash"),
+  chequeNumber: z.string().max(80).optional().default(""),
+  chequeDate: z.coerce.date().optional().nullable(),
+  bankName: z.string().max(120).optional().default(""),
+}).superRefine((data, ctx) => {
+  if (data.paymentMethod !== "cheque") return;
+  const requiresChequeDetails = data.purchaseKind === "spot" || (data.paidAmount ?? 0) > 0;
+  if (!requiresChequeDetails) return;
+  if (!data.chequeNumber?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required for cheque payment.", path: ["chequeNumber"] });
+  }
+  if (!data.bankName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered bank account for cheque payment.", path: ["bankName"] });
+  }
+  if (!data.chequeDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required for cheque payment.", path: ["chequeDate"] });
+  }
 });
+
+export const purchaseReceiveLineSchema = z.object({
+  productId: objectId,
+  receivedQuantity: z.coerce.number().min(0),
+  receivedCost: money,
+  discountType: z.enum(["flat", "flat_per_piece", "percentage"]).optional(),
+  discountValue: money.optional(),
+  salesTaxType: z.enum(["flat", "percentage"]).optional(),
+  salesTaxValue: money.optional(),
+});
+
+export const purchaseReceiveSchema = z.object({
+  items: z.array(purchaseReceiveLineSchema).min(1),
+  paidAmount: money.optional(),
+  paymentMethod: z.enum(["cash", "cheque", "credit"]).optional(),
+  chequeNumber: z.string().max(80).optional().default(""),
+  chequeDate: z.coerce.date().optional().nullable(),
+  bankName: z.string().max(120).optional().default(""),
+  advancePaid: money.optional(),
+}).superRefine((data, ctx) => {
+  if (data.paymentMethod !== "cheque") return;
+  const advancePaid = data.advancePaid ?? 0;
+  const totalPaid = data.paidAmount ?? 0;
+  const payOnDelivery = Math.max(totalPaid - advancePaid, 0);
+  if (payOnDelivery <= 0) return;
+  if (!data.chequeNumber?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required for cheque payment.", path: ["chequeNumber"] });
+  }
+  if (!data.bankName?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered bank account for cheque payment.", path: ["bankName"] });
+  }
+  if (!data.chequeDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required for cheque payment.", path: ["chequeDate"] });
+  }
+});
+
+export const vendorPaymentMethods = ["cash", "cheque", "bank", "card"] as const;
+
+export const supplierLedgerPaymentSchema = z
+  .object({
+    supplierId: objectId,
+    amount: z.coerce.number().positive("Amount must be greater than zero"),
+    description: z.string().min(1).max(500),
+    type: z.enum(["payment", "adjustment"]).default("payment"),
+    entryDate: z.coerce.date().optional(),
+    paymentMethod: z.enum(vendorPaymentMethods).default("cash"),
+    reference: z.string().max(120).optional().default(""),
+    bankName: z.string().max(120).optional().default(""),
+    chequeDate: z.coerce.date().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type !== "payment") return;
+    const reference = data.reference?.trim() ?? "";
+    const bankName = data.bankName?.trim() ?? "";
+    if (data.paymentMethod === "bank") {
+      if (!reference) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Reference number is required for bank transfer", path: ["reference"] });
+      }
+      if (!bankName) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered bank account", path: ["bankName"] });
+      }
+      return;
+    }
+    if (data.paymentMethod === "cheque") {
+      if (!reference) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required", path: ["reference"] });
+      }
+      if (!bankName) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Bank name is required for cheque", path: ["bankName"] });
+      }
+      if (!data.chequeDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required", path: ["chequeDate"] });
+      }
+      return;
+    }
+    if (data.paymentMethod !== "cash" && !reference) {
+      const label = data.paymentMethod === "card" ? "Card reference" : "Reference";
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} is required`, path: ["reference"] });
+    }
+  });
+
+const supplierLedgerRepaySchema = z.object({
+  paymentMethod: z.enum(vendorPaymentMethods).default("cash"),
+  reference: z.string().max(120).optional().default(""),
+  bankName: z.string().max(120).optional().default(""),
+  chequeDate: z.coerce.date().optional().nullable(),
+  entryDate: z.coerce.date().optional(),
+  description: z.string().min(1).max(500).optional(),
+});
+
+function refineVendorRepayment(data: z.infer<typeof supplierLedgerRepaySchema>, ctx: z.RefinementCtx, pathPrefix?: string) {
+  const fieldPath = (key: string) => (pathPrefix ? [pathPrefix, key] : [key]);
+  const reference = data.reference?.trim() ?? "";
+  const bankName = data.bankName?.trim() ?? "";
+  if (data.paymentMethod === "bank") {
+    if (!reference) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Reference number is required for bank transfer", path: fieldPath("reference") });
+    }
+    if (!bankName) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered bank account", path: fieldPath("bankName") });
+    }
+    return;
+  }
+  if (data.paymentMethod === "cheque") {
+    if (!reference) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required", path: fieldPath("reference") });
+    }
+    if (!bankName) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Bank name is required for cheque", path: fieldPath("bankName") });
+    }
+    if (!data.chequeDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required", path: fieldPath("chequeDate") });
+    }
+    return;
+  }
+  if (data.paymentMethod !== "cash" && !reference) {
+    const label = data.paymentMethod === "card" ? "Card reference" : "Reference";
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${label} is required`, path: fieldPath("reference") });
+  }
+}
+
+export const supplierLedgerChequeBounceSchema = z
+  .object({
+    supplierId: objectId,
+    originalEntryId: objectId,
+    entryDate: z.coerce.date().optional(),
+    description: z.string().min(1).max(500).optional(),
+    recordRepayment: z.boolean().default(true),
+    repay: supplierLedgerRepaySchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.recordRepayment) return;
+    if (!data.repay) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Repayment details are required.", path: ["repay"] });
+      return;
+    }
+    refineVendorRepayment(data.repay, ctx, "repay");
+  });
+
+export const saleChequeBounceSchema = z
+  .object({
+    saleId: objectId,
+    entryDate: z.coerce.date().optional(),
+    description: z.string().min(1).max(500).optional(),
+    recordRepayment: z.boolean().default(true),
+    repay: supplierLedgerRepaySchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.recordRepayment) return;
+    if (!data.repay) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Repayment details are required.", path: ["repay"] });
+      return;
+    }
+    refineVendorRepayment(data.repay, ctx, "repay");
+  });
 
 export const ledgerEntrySchema = z.object({
   customer: objectId,
@@ -195,6 +429,34 @@ export const ledgerEntrySchema = z.object({
   description: z.string().min(2).max(500),
   entryDate: z.coerce.date().default(() => new Date()),
 });
+
+const navRouteEnum = z.enum([
+  "dashboard",
+  "inventory",
+  "categories",
+  "brands",
+  "warehouses",
+  "customers",
+  "customer-groups",
+  "coupons",
+  "vendors",
+  "suppliers",
+  "pos",
+  "ledger",
+  "sales",
+  "purchases",
+  "spot-purchases",
+  "employees",
+  "attendance",
+  "salaries",
+  "expenses",
+  "activity",
+  "login-history",
+  "reports",
+  "settings",
+  "accounting",
+  "bank",
+]);
 
 export const settingsSchema = z.object({
   appName: z.string().min(2).max(80).default("Shopkeeper"),
@@ -218,65 +480,33 @@ export const settingsSchema = z.object({
   receiptHeader: z.string().max(500).default(""),
   receiptFooter: z.string().max(500).default(""),
   thankYouMessage: z.string().max(200).default("Thank you for shopping with us."),
-  managerRoutes: z
-    .array(
-      z.enum([
-        "dashboard",
-        "inventory",
-        "categories",
-        "customers",
-        "suppliers",
-        "pos",
-        "ledger",
-        "sales",
-        "purchases",
-        "employees",
-        "attendance",
-        "salaries",
-        "expenses",
-        "activity",
-        "reports",
-        "settings",
-      ]),
-    )
-    .default([
-      "dashboard",
-      "inventory",
-      "categories",
-      "customers",
-      "suppliers",
-      "pos",
-      "ledger",
-      "sales",
-      "purchases",
-      "employees",
-      "attendance",
-      "salaries",
-      "expenses",
-      "reports",
-    ]),
-  cashierRoutes: z
-    .array(
-      z.enum([
-        "dashboard",
-        "inventory",
-        "categories",
-        "customers",
-        "suppliers",
-        "pos",
-        "ledger",
-        "sales",
-        "purchases",
-        "employees",
-        "attendance",
-        "salaries",
-        "expenses",
-        "activity",
-        "reports",
-        "settings",
-      ]),
-    )
-    .default(["pos", "sales"]),
+  timezone: z.string().max(80).default("Asia/Karachi"),
+  language: z.string().max(10).default("en"),
+  theme: z.enum(["light", "dark", "system"]).default("light"),
+  managerRoutes: z.array(navRouteEnum).default([
+    "dashboard",
+    "inventory",
+    "categories",
+    "brands",
+    "warehouses",
+    "customers",
+    "customer-groups",
+    "coupons",
+    "vendors",
+    "pos",
+    "ledger",
+    "sales",
+    "purchases",
+    "spot-purchases",
+    "employees",
+    "attendance",
+    "salaries",
+    "expenses",
+    "accounting",
+    "bank",
+    "reports",
+  ]),
+  cashierRoutes: z.array(navRouteEnum).default(["pos", "sales"]),
 });
 
 export const expenseCategories = [
@@ -335,13 +565,133 @@ export const salarySchema = z.object({
   notes: z.string().max(500).optional().default(""),
 });
 
-export const expenseSchema = z.object({
-  category: z.enum(expenseCategories),
-  title: z.string().min(2).max(160),
-  amount: money,
-  expenseDate: z.coerce.date().default(() => new Date()),
-  paymentMethod: z.enum(["cash", "bank", "easypaisa", "jazzcash", "other"]).default("cash"),
-  reference: z.string().max(120).optional().default(""),
-  notes: z.string().max(1000).optional().default(""),
+export const expenseSchema = z
+  .object({
+    category: z.enum(expenseCategories),
+    title: z.string().min(2).max(160),
+    amount: money,
+    expenseDate: z.coerce.date().default(() => new Date()),
+    paymentMethod: z.enum(["cash", "bank", "other"]).default("cash"),
+    bankName: z.string().max(120).optional().default(""),
+    reference: z.string().max(120).optional().default(""),
+    notes: z.string().max(1000).optional().default(""),
+    status: status.default("active"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentMethod === "bank" && !data.bankName?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered payment account.", path: ["bankName"] });
+    }
+  });
+
+export const brandSchema = z.object({
+  name: z.string().min(2).max(120),
+  logo: z.string().max(2_500_000).optional().default(""),
+  description: z.string().max(500).optional().default(""),
   status: status.default("active"),
 });
+
+export const shopAccountTypes = ["bank"] as const;
+
+export const bankAccountBaseSchema = z.object({
+  accountType: z.enum(shopAccountTypes).default("bank"),
+  name: z.string().trim().min(2, "Display name is required.").max(120),
+  accountTitle: z.string().trim().min(2, "Account title is required.").max(160),
+  accountNumber: z.string().trim().min(1, "Account number is required.").max(40),
+  branch: z.string().trim().max(120).optional().default(""),
+  iban: z.string().trim().max(34).optional().default(""),
+  notes: z.string().trim().max(500).optional().default(""),
+  status: status.default("active"),
+});
+
+export const bankAccountFieldsSchema = bankAccountBaseSchema.superRefine((data, ctx) => {
+  if (!isValidBankAccountNumber(data.accountNumber)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: BANK_ACCOUNT_ERROR,
+      path: ["accountNumber"],
+    });
+  }
+  const iban = normalizePakistanIban(data.iban ?? "");
+  if (iban && !isValidPakistanIban(iban)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: IBAN_ERROR,
+      path: ["iban"],
+    });
+  }
+});
+
+export const bankAccountSchema = bankAccountFieldsSchema.transform((data) => ({
+  ...data,
+  accountNumber: normalizeBankAccountNumber(data.accountNumber),
+  branch: (data.branch ?? "").trim(),
+  iban: normalizePakistanIban(data.iban ?? ""),
+  notes: (data.notes ?? "").trim(),
+}));
+
+export const warehouseSchema = z.object({
+  name: z.string().min(2).max(120),
+  code: z.string().min(2).max(40).toUpperCase(),
+  address: z.string().max(500).optional().default(""),
+  phone: pakistanMobileOptionalSchema,
+  isDefault: z.boolean().default(false),
+  status: status.default("active"),
+});
+
+export const couponSchema = z.object({
+  code: z.string().min(2).max(40).toUpperCase(),
+  type: z.enum(["flat", "percentage"]).default("flat"),
+  value: money,
+  minOrder: money.default(0),
+  maxUses: z.coerce.number().int().min(0).default(0),
+  startsAt: z.coerce.date().optional().nullable(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  status: status.default("active"),
+});
+
+export const customerGroupSchema = z.object({
+  name: z.string().min(2).max(120),
+  discountPercent: z.coerce.number().min(0).max(100).default(0),
+  description: z.string().max(500).optional().default(""),
+  status: status.default("active"),
+});
+
+export const accountingEntrySchema = z.object({
+  book: z.enum(["cash", "bank", "income", "expense"]),
+  type: z.enum(["debit", "credit"]),
+  amount: money,
+  reference: z.string().max(120).optional().default(""),
+  description: z.string().min(2).max(500),
+  entryDate: z.coerce.date().default(() => new Date()),
+  bankName: z.string().max(120).optional().default(""),
+  paymentMethod: z.enum(["cash", "cheque", "bank", "easypaisa", "jazzcash", "card"]).optional(),
+});
+
+export const bankDepositSchema = z
+  .object({
+    depositType: z.enum(["cash", "cheque"]),
+    amount: money,
+    bankName: z.string().min(1, "Bank name is required.").max(120),
+    entryDate: z.coerce.date().optional(),
+    reference: z.string().max(120).optional().default(""),
+    description: z.string().max(500).optional().default(""),
+    chequeDate: z.coerce.date().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.depositType === "cheque" && !data.reference?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque number is required.", path: ["reference"] });
+    }
+    if (data.depositType === "cheque" && !data.chequeDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cheque date is required.", path: ["chequeDate"] });
+    }
+  });
+
+export const stockTransferSchema = z.object({
+  product: objectId,
+  fromWarehouse: objectId,
+  toWarehouse: objectId,
+  quantity: z.coerce.number().positive(),
+  notes: z.string().max(500).optional().default(""),
+});
+
+export { navRouteEnum };

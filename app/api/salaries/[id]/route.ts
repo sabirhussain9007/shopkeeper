@@ -4,7 +4,7 @@ import { logActivity } from "@/lib/activity";
 import { computeNetSalary } from "@/lib/salaries";
 import { requireApiPermission } from "@/lib/rbac";
 import { withShopFilter } from "@/lib/tenant";
-import { Salary } from "@/models";
+import { Employee, Salary } from "@/models";
 import { salarySchema } from "@/schemas/domain";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   };
   const netSalary = computeNetSalary(merged);
   const paymentStatus = payload.data.paymentStatus ?? existing.paymentStatus;
+  const wasPaid = existing.paymentStatus === "paid";
 
   Object.assign(existing, payload.data, {
     netSalary,
@@ -50,6 +51,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       entityId: id,
       description: `Salary marked paid — Rs. ${netSalary}`,
     });
+
+    if (!wasPaid) {
+      const employee = await Employee.findOne(withShopFilter(allowed.session.user.shopId!, { _id: existing.employee })).select("fullName").lean();
+      const { syncSalaryPaymentAccounting } = await import("@/lib/accounting-sync");
+      await syncSalaryPaymentAccounting(
+        allowed.session.user.shopId!,
+        allowed.session.user.id,
+        id,
+        employee?.fullName ?? "Employee",
+        netSalary,
+        "cash",
+        "",
+        existing.paidAt ?? new Date(),
+      );
+    }
   }
 
   return NextResponse.json(existing);

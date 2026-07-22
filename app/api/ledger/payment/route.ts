@@ -12,6 +12,10 @@ export async function POST(req: NextRequest) {
     description?: string;
     action?: "payment" | "adjustment";
     direction?: "increase" | "decrease";
+    paymentMethod?: string;
+    reference?: string;
+    bankName?: string;
+    chequeDate?: string;
   };
 
   if (!body.customerId || !body.amount || !body.description) {
@@ -22,7 +26,12 @@ export async function POST(req: NextRequest) {
   const result =
     body.action === "adjustment"
       ? await recordAdjustment(body.customerId, body.amount, body.direction ?? "decrease", body.description, allowed.session.user.id, shopId)
-      : await recordPayment(body.customerId, body.amount, body.description, allowed.session.user.id, shopId);
+      : await recordPayment(body.customerId, body.amount, body.description, allowed.session.user.id, shopId, {
+          paymentMethod: body.paymentMethod ?? "cash",
+          reference: body.reference,
+          bankName: body.bankName,
+          chequeDate: body.chequeDate ? new Date(body.chequeDate) : undefined,
+        });
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json(result);

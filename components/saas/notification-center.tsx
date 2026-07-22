@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,18 @@ type NotificationItem = {
 
 export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
   const [open, setOpen] = useState(false);
+  const [ready, setReady] = useState(false);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const enable = () => setReady(true);
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(enable, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(enable, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const notifications = useQuery({
     queryKey: ["notifications", audience ?? "shop"],
@@ -28,7 +39,8 @@ export function NotificationCenter({ audience }: { audience?: "super_admin" }) {
       if (!res.ok) return { items: [] as NotificationItem[], unreadCount: 0 };
       return res.json() as Promise<{ items: NotificationItem[]; unreadCount: number }>;
     },
-    refetchInterval: 60_000,
+    enabled: ready,
+    refetchInterval: ready ? 60_000 : false,
   });
 
   const items = notifications.data?.items ?? [];

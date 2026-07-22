@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { passwordResetEmail } from "@/lib/email";
 import { connectDb } from "@/lib/db";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { User } from "@/models";
 
 function tokenHash(token: string) {
@@ -8,6 +10,12 @@ function tokenHash(token: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  const limited = rateLimit(`forgot:${ip}`, 5, 15 * 60_000);
+  if (!limited.ok) {
+    return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
+  }
+
   const { email } = (await req.json()) as { email?: string };
   await connectDb();
   const user = email ? await User.findOne({ email: email.toLowerCase(), status: "active" }) : null;
@@ -17,10 +25,15 @@ export async function POST(req: NextRequest) {
     user.resetTokenHash = tokenHash(token);
     user.resetTokenExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
     await user.save();
+    try {
+      await passwordResetEmail(user.email, token);
+    } catch {
+      // Still return generic success to avoid account enumeration.
+    }
   }
 
   return NextResponse.json({
-    message: "If the account exists, password reset instructions have been prepared.",
+    message: "If the account exists, password reset instructions have been sent.",
     resetToken: process.env.NODE_ENV === "production" ? undefined : token,
   });
 }

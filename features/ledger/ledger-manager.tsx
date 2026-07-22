@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Download, FileDown, MessageCircle, Phone, Plus, Printer, Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
@@ -18,7 +18,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BlockLoader, Spinner, TableLoader } from "@/components/ui/loader";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanDate, formatPakistanDateTime } from "@/lib/utils";
+import { PaymentAccountSelect, PaymentMethodAccountSelect } from "@/components/payment/payment-method-account-select";
+import { useShopPaymentAccounts } from "@/hooks/use-shop-payment-accounts";
+import { resolvePaymentSelection, STANDARD_BASE_PAYMENT_METHODS } from "@/lib/payment-accounts";
 
 type Customer = { _id: string; name: string; phone: string; creditLimit: number; currentBalance?: number };
 type BusinessSettings = { businessName: string; logo: string; address: string; phone: string; email: string; gstVatNumber: string; ntn: string };
@@ -74,7 +77,7 @@ function statementTemplate(name: string, amount: number) {
 
 function downloadInvoicePdf(detail: SaleDetail, business: BusinessSettings, ledgerSummary?: InvoiceLedgerSummary) {
   const doc = new jsPDF();
-  const invoiceDate = detail.sale.createdAt ? new Date(detail.sale.createdAt).toLocaleString() : "";
+  const invoiceDate = detail.sale.createdAt ? formatPakistanDateTime(detail.sale.createdAt, "") : "";
 
   doc.setFontSize(18);
   doc.text(business.businessName, 14, 18);
@@ -167,6 +170,9 @@ export function LedgerManager() {
   const [description, setDescription] = useState("");
   const [action, setAction] = useState<"payment" | "adjustment">("payment");
   const [direction, setDirection] = useState<"increase" | "decrease">("decrease");
+  const [paymentSelection, setPaymentSelection] = useState("cash");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentChequeBankAccountId, setPaymentChequeBankAccountId] = useState("");
   const settings = useQuery({
     queryKey: ["pos-settings"],
     queryFn: async () => {
@@ -176,6 +182,19 @@ export function LedgerManager() {
     },
     staleTime: 60_000,
   });
+
+  const paymentAccountsQuery = useShopPaymentAccounts({ enabled: paymentOpen });
+  const bankAccountsQuery = useShopPaymentAccounts({ accountType: "bank", enabled: paymentOpen });
+  const paymentAccounts = paymentAccountsQuery.data?.items ?? [];
+  const bankAccounts = bankAccountsQuery.data?.items ?? [];
+  const resolvedPaymentSelection = resolvePaymentSelection(paymentSelection, paymentAccounts);
+  const paymentChequeBankName = bankAccounts.find((account) => account._id === paymentChequeBankAccountId)?.name ?? "";
+
+  useEffect(() => {
+    if (!paymentChequeBankAccountId && bankAccounts.length > 0) {
+      setPaymentChequeBankAccountId(bankAccounts[0]._id);
+    }
+  }, [bankAccounts, paymentChequeBankAccountId]);
 
   const overview = useQuery({
     queryKey: ["ledger-overview"],
@@ -246,7 +265,7 @@ export function LedgerManager() {
   };
 
   const statementRowForEntry = (entry: LedgerEntry) => [
-    new Date(entry.entryDate).toLocaleDateString(),
+    formatPakistanDate(entry.entryDate, ""),
     entryLabel(entry.type),
     currency(previousBalanceForEntry(entry)),
     entry.sale ? currency(entry.sale.subtotal ?? 0) : "-",
@@ -283,7 +302,21 @@ export function LedgerManager() {
     const response = await fetch("/api/ledger/payment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customerId: selectedId, amount, description, action, direction }),
+      body: JSON.stringify({
+        customerId: selectedId,
+        amount,
+        description,
+        action,
+        direction,
+        paymentMethod: action === "payment" ? resolvedPaymentSelection.paymentMethod : undefined,
+        reference: action === "payment" ? paymentReference : undefined,
+        bankName:
+          action === "payment"
+            ? resolvedPaymentSelection.paymentMethod === "cheque"
+              ? paymentChequeBankName
+              : resolvedPaymentSelection.bankName
+            : undefined,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -294,6 +327,9 @@ export function LedgerManager() {
     setPaymentOpen(false);
     setAmount(0);
     setDescription("");
+    setPaymentSelection("cash");
+    setPaymentReference("");
+    setPaymentChequeBankAccountId("");
     queryClient.invalidateQueries({ queryKey: ["ledger-overview"] });
     queryClient.invalidateQueries({ queryKey: ["ledger-customer", selectedId] });
   };
@@ -406,8 +442,8 @@ export function LedgerManager() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-                <table className="w-full min-w-[1050px] text-left text-sm">
+              <div className="responsive-table-shell responsive-table-shell--xl">
+                <table className="w-full text-left text-sm">
                   <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
                     <tr>
                       <th className="px-4 py-3">Date</th>
@@ -428,7 +464,7 @@ export function LedgerManager() {
                     ) : (
                       (customerLedger.data?.entries ?? []).map((entry) => (
                       <tr key={entry._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
-                        <td className="px-4 py-3">{new Date(entry.entryDate).toLocaleDateString()}</td>
+                        <td className="px-4 py-3">{formatPakistanDate(entry.entryDate)}</td>
                         <td className="px-4 py-3">
                           <Badge variant={entry.type === "payment_received" ? "success" : entry.type === "credit_sale" ? "warning" : "default"}>
                             {entryLabel(entry.type)}
@@ -504,7 +540,7 @@ export function LedgerManager() {
                   <tbody>
                     {(customerLedger.data?.entries ?? []).map((entry) => (
                       <tr key={entry._id} className="border-b border-zinc-300">
-                        <td className="py-2 pr-2">{new Date(entry.entryDate).toLocaleDateString()}</td>
+                        <td className="py-2 pr-2">{formatPakistanDate(entry.entryDate)}</td>
                         <td className="py-2 pr-2">{entryLabel(entry.type)}</td>
                         <td className="py-2 pr-2 text-right">{currency(previousBalanceForEntry(entry))}</td>
                         <td className="py-2 pr-2 text-right">{entry.sale ? currency(entry.sale.subtotal ?? 0) : "-"}</td>
@@ -530,7 +566,7 @@ export function LedgerManager() {
                     gstVatNumber={business.gstVatNumber}
                     ntn={business.ntn}
                     logo={business.logo}
-                    date={invoiceToPrint.sale.createdAt ? new Date(invoiceToPrint.sale.createdAt).toLocaleString() : new Date().toLocaleString()}
+                    date={formatPakistanDateTime(invoiceToPrint.sale.createdAt ?? new Date())}
                     cashierName={invoiceToPrint.sale.cashier?.name}
                     customerName={invoiceToPrint.sale.customer?.name}
                     items={invoiceToPrint.items}
@@ -585,7 +621,40 @@ export function LedgerManager() {
                   <option value="increase">Increase balance (debit)</option>
                 </Select>
               </div>
-            ) : null}
+            ) : (
+              <>
+                <div>
+                  <Label>Payment method</Label>
+                  <PaymentMethodAccountSelect
+                    className="mt-1.5"
+                    value={paymentSelection}
+                    onChange={setPaymentSelection}
+                    accounts={paymentAccounts}
+                    accountsLoading={paymentAccountsQuery.isLoading}
+                    baseMethods={[...STANDARD_BASE_PAYMENT_METHODS]}
+                    emptyAccountsHint="Add bank accounts under Finance → Bank."
+                  />
+                </div>
+                {resolvedPaymentSelection.paymentMethod === "cheque" ? (
+                  <div>
+                    <Label>Bank</Label>
+                    <PaymentAccountSelect
+                      className="mt-1.5"
+                      value={paymentChequeBankAccountId}
+                      onChange={setPaymentChequeBankAccountId}
+                      accounts={bankAccounts}
+                      emptyAccountsHint="Add bank accounts under Finance → Bank."
+                    />
+                  </div>
+                ) : null}
+                {resolvedPaymentSelection.paymentMethod !== "cash" ? (
+                  <div>
+                    <Label>{resolvedPaymentSelection.paymentMethod === "cheque" ? "Cheque number" : "Reference"}</Label>
+                    <Input className="mt-1.5" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} />
+                  </div>
+                ) : null}
+              </>
+            )}
             <div>
               <Label>Amount</Label>
               <Input className="mt-1.5" type="number" min={1} value={amount || ""} onChange={(e) => setAmount(Number(e.target.value))} />

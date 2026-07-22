@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, formatPakistanDateInput, pakistanMonthStart, pakistanTodayKey, pakistanWeekStart } from "@/lib/utils";
 import { attendanceSchema } from "@/schemas/domain";
 import { exportRowsToExcel, exportRowsToPdf } from "@/services/report-export";
 import type { AttendanceInput, EmployeeInput } from "@/types";
@@ -25,24 +25,15 @@ import type { AttendanceInput, EmployeeInput } from "@/types";
 type ReportPeriod = "today" | "week" | "month" | "custom";
 
 function toDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return formatPakistanDateInput(date);
 }
 
 function periodRange(period: ReportPeriod): { from?: string; to?: string } {
   const now = new Date();
-  const today = toDateKey(now);
+  const today = pakistanTodayKey(now);
   if (period === "today") return { from: today, to: today };
-  if (period === "week") {
-    const start = new Date(now);
-    const day = start.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    start.setDate(start.getDate() - diff);
-    return { from: toDateKey(start), to: today };
-  }
-  if (period === "month") {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: toDateKey(start), to: today };
-  }
+  if (period === "week") return { from: toDateKey(pakistanWeekStart(now)), to: today };
+  if (period === "month") return { from: toDateKey(pakistanMonthStart(now)), to: today };
   return {};
 }
 
@@ -75,10 +66,7 @@ const formSchema = attendanceSchema;
 type FormValues = z.input<typeof formSchema>;
 
 function toDateInput(value?: Date | string | null) {
-  if (!value) return "";
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return formatPakistanDateInput(value);
 }
 
 function employeeLabel(row: AttendanceRow) {
@@ -344,7 +332,7 @@ export function AttendanceManager() {
             />
           </div>
         </div>
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>

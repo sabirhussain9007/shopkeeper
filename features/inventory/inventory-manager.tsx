@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Copy, Download, Package, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
+import { Copy, Download, Package, PackagePlus, Pencil, Plus, Trash2, TrendingUp, Upload } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -22,10 +22,12 @@ import { useCrud } from "@/hooks/use-crud";
 import { currency, percentage } from "@/lib/utils";
 import { productSchema } from "@/schemas/domain";
 import { exportRowsToPdf } from "@/services/report-export";
-import type { CategoryInput, ProductInput } from "@/types";
+import { parseCsv } from "@/services/csv-import";
+import type { CategoryInput, ProductInput, SupplierInput } from "@/types";
 
 type Product = ProductInput & { _id: string };
 type Category = CategoryInput & { _id: string };
+type Vendor = SupplierInput & { _id: string; supplierName: string };
 
 const formSchema = productSchema;
 type FormValues = z.input<typeof formSchema>;
@@ -57,6 +59,7 @@ function profitInfo(purchase: number, selling: number) {
 export function InventoryManager() {
   const { list, create, update, remove, params, setParams } = useCrud<ProductInput, Product>("products");
   const categoriesCrud = useCrud<CategoryInput, Category>("categories", { limit: 100 });
+  const vendorsCrud = useCrud<SupplierInput, Vendor>("suppliers", { limit: 100 });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [stockOpen, setStockOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -65,6 +68,14 @@ export function InventoryManager() {
   const [stockQty, setStockQty] = useState(1);
   const [stockReason, setStockReason] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [buyStockOpen, setBuyStockOpen] = useState(false);
+  const [buyStockProduct, setBuyStockProduct] = useState<Product | null>(null);
+  const [buyVendorId, setBuyVendorId] = useState("");
+  const [buyQty, setBuyQty] = useState(1);
+  const [buyUnitCost, setBuyUnitCost] = useState(0);
+  const [buyPaidAmount, setBuyPaidAmount] = useState(0);
+  const [buyNotes, setBuyNotes] = useState("");
+  const [buyPending, setBuyPending] = useState(false);
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: emptyValues });
   const purchasePrice = form.watch("purchasePrice");
@@ -72,6 +83,8 @@ export function InventoryManager() {
   const profit = useMemo(() => profitInfo(Number(purchasePrice) || 0, Number(sellingPrice) || 0), [purchasePrice, sellingPrice]);
 
   const categories = categoriesCrud.list.data?.items ?? [];
+  const vendors = useMemo(() => vendorsCrud.list.data?.items ?? [], [vendorsCrud.list.data?.items]);
+  const vendorNameById = useMemo(() => new Map(vendors.map((v) => [v._id, v.supplierName])), [vendors]);
 
   const openCreate = () => {
     setEditing(null);
@@ -108,6 +121,23 @@ export function InventoryManager() {
     setStockReason("");
     setStockOpen(true);
   };
+
+  const openBuyStock = (item: Product) => {
+    setBuyStockProduct(item);
+    setBuyVendorId(item.supplier ? String(item.supplier) : "");
+    setBuyQty(1);
+    setBuyUnitCost(item.purchasePrice ?? 0);
+    setBuyPaidAmount(0);
+    setBuyNotes("");
+    setBuyStockOpen(true);
+  };
+
+  const buyLineSubtotal = buyQty * buyUnitCost;
+  const buyTaxRate = buyStockProduct?.taxRate ?? 0;
+  const buyTaxes = (buyLineSubtotal * buyTaxRate) / 100;
+  const buyGrandTotal = buyLineSubtotal + buyTaxes;
+  const buyNewStock = (buyStockProduct?.quantity ?? 0) + buyQty;
+  const buyRateIncreased = buyStockProduct ? buyUnitCost > (buyStockProduct.purchasePrice ?? 0) : false;
 
   const onSearch = useCallback((q: string) => setParams((p) => ({ ...p, q, page: 1 })), [setParams]);
   const onStatusChange = useCallback((status: string) => setParams((p) => ({ ...p, status: status || undefined, page: 1 })), [setParams]);
@@ -166,6 +196,24 @@ export function InventoryManager() {
     );
   };
 
+  const onImportCsv = async (file: File) => {
+    try {
+      const rows = await parseCsv<Record<string, string>>(file);
+      const response = await fetch("/api/products/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Import failed");
+      toast.success(`Imported ${data.created} of ${data.total} products.`);
+      if (data.errors?.length) toast.message(`${data.errors.length} rows skipped.`);
+      list.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Import failed.");
+    }
+  };
+
   const onStockSubmit = async () => {
     if (!stockProduct) return;
     const previous = stockProduct.quantity;
@@ -193,6 +241,52 @@ export function InventoryManager() {
     list.refetch();
   };
 
+  const onBuyStockSubmit = async () => {
+    if (!buyStockProduct) return;
+    if (!buyVendorId) {
+      toast.error("Select the vendor you are buying from.");
+      return;
+    }
+    if (buyQty <= 0) {
+      toast.error("Enter a valid quantity.");
+      return;
+    }
+    if (buyUnitCost < 0) {
+      toast.error("Enter a valid purchase rate.");
+      return;
+    }
+
+    setBuyPending(true);
+    try {
+      const response = await fetch(`/api/products/${buyStockProduct._id}/buy-stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorId: buyVendorId,
+          quantity: buyQty,
+          unitCost: buyUnitCost,
+          paidAmount: buyPaidAmount,
+          notes: buyNotes,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to buy stock.");
+
+      const rateMsg =
+        buyRateIncreased && buyStockProduct.purchasePrice
+          ? ` Purchase rate updated from ${currency(buyStockProduct.purchasePrice)} to ${currency(buyUnitCost)}.`
+          : "";
+      toast.success(`Stock received — ${buyNewStock} ${buyStockProduct.unit ?? "pcs"} in hand.${rateMsg}`);
+      setBuyStockOpen(false);
+      list.refetch();
+      vendorsCrud.list.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to buy stock.");
+    } finally {
+      setBuyPending(false);
+    }
+  };
+
   const items = list.data?.items ?? [];
   const isSaving = create.isPending || update.isPending;
 
@@ -216,14 +310,30 @@ export function InventoryManager() {
           onSearch={onSearch}
           onStatusChange={onStatusChange}
           actions={
-            <Button variant="ghost" onClick={onExportPdf}>
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
+            <>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100">
+                <Upload className="h-4 w-4" />
+                Import CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void onImportCsv(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <Button variant="ghost" onClick={onExportPdf}>
+                <Download className="h-4 w-4" />
+                Export PDF
+              </Button>
+            </>
           }
         />
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-          <table className="w-full min-w-[900px] text-left text-sm">
+        <div className="responsive-table-shell responsive-table-shell--lg">
+          <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Product</th>
@@ -232,16 +342,17 @@ export function InventoryManager() {
                 <th className="px-4 py-3 font-medium">Purchase</th>
                 <th className="px-4 py-3 font-medium">Selling</th>
                 <th className="px-4 py-3 font-medium">Profit</th>
+                <th className="px-4 py-3 font-medium">Vendor</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {list.isLoading ? (
-                <TableLoader colSpan={8} label="Loading products..." />
+                <TableLoader colSpan={9} label="Loading products..." />
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
                     No products found. Add your first product.
                   </td>
                 </tr>
@@ -267,11 +378,17 @@ export function InventoryManager() {
                         <div>{currency(lineProfit)}</div>
                         <div className="text-xs text-zinc-500">{percentage(margin)}</div>
                       </td>
+                      <td className="px-4 py-3 text-zinc-500">
+                        {item.supplier ? vendorNameById.get(String(item.supplier)) ?? "—" : "—"}
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant={item.status === "active" ? "success" : "default"}>{item.status}</Badge>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" title="Buy stock from vendor" onClick={() => openBuyStock(item)}>
+                            <PackagePlus className="h-4 w-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" title="Adjust stock" onClick={() => openStock(item)}>
                             <Package className="h-4 w-4" />
                           </Button>
@@ -323,6 +440,17 @@ export function InventoryManager() {
                 {categories.map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="vendor">Vendor</Label>
+              <Select id="vendor" className="mt-1.5" {...form.register("supplier")}>
+                <option value="">No vendor</option>
+                {vendors.map((v) => (
+                  <option key={v._id} value={v._id}>
+                    {v.supplierName}
                   </option>
                 ))}
               </Select>
@@ -385,6 +513,112 @@ export function InventoryManager() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={buyStockOpen} onOpenChange={setBuyStockOpen}>
+        <DialogContent
+          title="Buy Stock"
+          description={
+            buyStockProduct
+              ? `${buyStockProduct.productName} · SKU ${buyStockProduct.sku} · Current stock: ${buyStockProduct.quantity} ${buyStockProduct.unit ?? "pcs"}`
+              : undefined
+          }
+          className="max-w-lg"
+        >
+          {buyStockProduct ? (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="buy-vendor">Vendor</Label>
+                <Select id="buy-vendor" className="mt-1.5" value={buyVendorId} onChange={(e) => setBuyVendorId(e.target.value)}>
+                  <option value="">Select vendor</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={v._id}>
+                      {v.supplierName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="buy-qty">Quantity to add</Label>
+                  <Input
+                    id="buy-qty"
+                    className="mt-1.5"
+                    type="number"
+                    min={1}
+                    value={buyQty || ""}
+                    onChange={(e) => setBuyQty(Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="buy-rate">Purchase rate (per unit)</Label>
+                  <Input
+                    id="buy-rate"
+                    className="mt-1.5"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={buyUnitCost || ""}
+                    onChange={(e) => setBuyUnitCost(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+              {buyRateIncreased ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Rate increased from <strong>{currency(buyStockProduct.purchasePrice)}</strong> to{" "}
+                  <strong>{currency(buyUnitCost)}</strong>. The product purchase price will be updated.
+                </div>
+              ) : null}
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-800">
+                <div className="flex justify-between">
+                  <span>New stock on hand</span>
+                  <strong>
+                    {buyStockProduct.quantity} + {buyQty} = {buyNewStock} {buyStockProduct.unit ?? "pcs"}
+                  </strong>
+                </div>
+                <div className="mt-2 flex justify-between">
+                  <span>Line total {buyTaxRate > 0 ? `(incl. ${buyTaxRate}% tax)` : ""}</span>
+                  <strong>{currency(buyGrandTotal)}</strong>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="buy-paid">Paid now (optional)</Label>
+                <Input
+                  id="buy-paid"
+                  className="mt-1.5"
+                  type="number"
+                  min={0}
+                  max={buyGrandTotal}
+                  value={buyPaidAmount || ""}
+                  onChange={(e) => setBuyPaidAmount(Number(e.target.value))}
+                />
+                {buyGrandTotal - buyPaidAmount > 0 ? (
+                  <p className="mt-1.5 text-xs text-zinc-500">
+                    {currency(buyGrandTotal - buyPaidAmount)} will be added to vendor balance.
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <Label htmlFor="buy-notes">Notes (optional)</Label>
+                <Textarea
+                  id="buy-notes"
+                  className="mt-1.5"
+                  value={buyNotes}
+                  onChange={(e) => setBuyNotes(e.target.value)}
+                  placeholder="Invoice ref, delivery note, etc."
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setBuyStockOpen(false)}>
+                  Cancel
+                </Button>
+                <Button loading={buyPending} loadingLabel="Receiving..." onClick={() => void onBuyStockSubmit()}>
+                  Receive stock
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 

@@ -26,6 +26,12 @@ export function LoginForm() {
     if (searchParams.get("created") === "1") {
       toast.success("Shop submitted. Sign in after an admin verifies your payment.");
     }
+    if (searchParams.get("verified") === "1") {
+      toast.success("Email verified. You can sign in now.");
+    }
+    if (searchParams.get("verify") === "invalid") {
+      toast.error("Verification link is invalid or expired.");
+    }
   }, [searchParams]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -36,6 +42,7 @@ export function LoginForm() {
     const result = await signIn("credentials", {
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
+      remember: formData.get("remember") === "on" ? "true" : "false",
       redirect: false,
       callbackUrl: callbackUrl ?? undefined,
     });
@@ -119,6 +126,10 @@ export function LoginForm() {
             </label>
             <Input id="password" name="password" type="password" placeholder="••••••••" required autoComplete="current-password" className="bg-white" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-zinc-600">
+            <input type="checkbox" name="remember" className="h-4 w-4 accent-emerald-600" />
+            Remember me for 30 days
+          </label>
           <Button className="mt-2 w-full" type="submit" loading={isPending} loadingLabel="Signing in...">
             Sign in
           </Button>

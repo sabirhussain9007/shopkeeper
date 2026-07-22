@@ -1,6 +1,9 @@
 import type { z } from "zod";
 import type {
+  accountingEntrySchema,
   attendanceSchema,
+  bankAccountSchema,
+  brandSchema,
   categorySchema,
   customerSchema,
   employeeSchema,
@@ -12,6 +15,7 @@ import type {
   settingsSchema,
   supplierSchema,
   userSchema,
+  warehouseSchema,
 } from "@/schemas/domain";
 
 export const roles = ["super_admin", "admin", "manager", "cashier"] as const;
@@ -79,8 +83,22 @@ export type EmployeeInput = z.infer<typeof employeeSchema>;
 export type AttendanceInput = z.infer<typeof attendanceSchema>;
 export type SalaryInput = z.infer<typeof salarySchema>;
 export type ExpenseInput = z.infer<typeof expenseSchema>;
+export type BrandInput = z.infer<typeof brandSchema>;
+export type BankAccountInput = z.infer<typeof bankAccountSchema>;
+export type WarehouseInput = z.infer<typeof warehouseSchema>;
+export type AccountingEntryInput = z.infer<typeof accountingEntrySchema>;
 
-export type PaymentMethod = "cash" | "credit" | "split";
+export type PaymentMethod = "cash" | "credit" | "split" | "card" | "bank" | "easypaisa" | "jazzcash" | "cheque";
+
+export const POS_PAYMENT_METHODS: PaymentMethod[] = ["cash", "cheque", "credit", "split"];
+
+export function isCreditPayment(method: PaymentMethod) {
+  return method === "credit" || method === "split";
+}
+
+export function requiresFullPayment(method: PaymentMethod) {
+  return method === "cash" || method === "card" || method === "bank" || method === "cheque";
+}
 export type ReceiptSize = "58mm" | "80mm" | "a4";
 
 export type CartItem = {

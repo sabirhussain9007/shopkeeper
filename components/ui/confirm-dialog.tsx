@@ -8,6 +8,7 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel?: string;
+  confirmVariant?: "primary" | "danger";
   isPending?: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void | Promise<void>;
@@ -18,6 +19,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  confirmVariant = "danger",
   isPending,
   onOpenChange,
   onConfirm,
@@ -29,7 +31,13 @@ export function ConfirmDialog({
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="button" variant="danger" onClick={() => void onConfirm()} loading={isPending} loadingLabel="Working...">
+          <Button
+            type="button"
+            variant={confirmVariant}
+            onClick={() => void onConfirm()}
+            loading={isPending}
+            loadingLabel="Working..."
+          >
             {confirmLabel}
           </Button>
         </div>

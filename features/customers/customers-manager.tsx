@@ -1,9 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, History, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { z } from "zod";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
@@ -21,7 +22,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { useCrud } from "@/hooks/use-crud";
 import { MobileInput, bindMobileField } from "@/components/ui/pakistan-fields";
 import { formatMobileInput } from "@/lib/pakistan-validators";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanDate } from "@/lib/utils";
 import { customerSchema } from "@/schemas/domain";
 import type { CustomerInput } from "@/types";
 
@@ -36,6 +37,8 @@ const emptyValues: FormValues = {
   address: "",
   creditLimit: 0,
   openingBalance: 0,
+  groupId: undefined,
+  rewardPoints: 0,
   notes: "",
   status: "active",
 };
@@ -45,6 +48,26 @@ export function CustomersManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<Customer | null>(null);
+
+  const groupsQuery = useQuery({
+    queryKey: ["customer-groups-options"],
+    queryFn: async () => {
+      const res = await fetch("/api/customer-groups?limit=100");
+      if (!res.ok) return { items: [] as Array<{ _id: string; name: string }> };
+      return res.json() as Promise<{ items: Array<{ _id: string; name: string }> }>;
+    },
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ["customer-sales", historyTarget?._id],
+    enabled: !!historyTarget,
+    queryFn: async () => {
+      const res = await fetch(`/api/customers/${historyTarget!._id}/sales`);
+      if (!res.ok) return { items: [] as Array<{ invoiceNumber: string; grandTotal: number; paymentMethod: string; status: string; createdAt?: string }> };
+      return res.json();
+    },
+  });
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: emptyValues });
 
@@ -62,6 +85,8 @@ export function CustomersManager() {
       address: item.address ?? "",
       creditLimit: item.creditLimit,
       openingBalance: item.openingBalance,
+      groupId: item.groupId,
+      rewardPoints: item.rewardPoints ?? 0,
       notes: item.notes ?? "",
       status: item.status,
     });
@@ -73,7 +98,10 @@ export function CustomersManager() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const payload = formSchema.parse(values);
+      const payload = formSchema.parse({
+        ...values,
+        groupId: values.groupId || undefined,
+      });
       if (editing) {
         await update.mutateAsync({ id: editing._id, input: payload });
         toast.success("Customer updated.");
@@ -116,7 +144,7 @@ export function CustomersManager() {
 
       <Surface>
         <DataToolbar placeholder="Search customers" status={params.status} onSearch={onSearch} onStatusChange={onStatusChange} />
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+        <div className="responsive-table-shell">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
               <tr>
@@ -124,16 +152,17 @@ export function CustomersManager() {
                 <th className="px-4 py-3 font-medium">Phone</th>
                 <th className="px-4 py-3 font-medium">Credit Limit</th>
                 <th className="px-4 py-3 font-medium">Balance</th>
+                <th className="px-4 py-3 font-medium">Points</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {list.isLoading ? (
-                <TableLoader colSpan={6} label="Loading customers..." />
+                <TableLoader colSpan={7} label="Loading customers..." />
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">
                     No customers found. Add your first customer.
                   </td>
                 </tr>
@@ -150,11 +179,15 @@ export function CustomersManager() {
                         <div>{currency(balance)}</div>
                         {overLimit ? <Badge variant="danger" className="mt-1">Over limit</Badge> : null}
                       </td>
+                      <td className="px-4 py-3">{item.rewardPoints ?? 0}</td>
                       <td className="px-4 py-3">
                         <Badge variant={item.status === "active" ? "success" : "default"}>{item.status}</Badge>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" title="Purchase history" onClick={() => setHistoryTarget(item)}>
+                            <History className="h-4 w-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -203,6 +236,21 @@ export function CustomersManager() {
                 <Label htmlFor="openingBalance">Opening Balance</Label>
                 <Input id="openingBalance" type="number" className="mt-1.5" {...form.register("openingBalance", { valueAsNumber: true })} />
               </div>
+              <div>
+                <Label htmlFor="groupId">Customer group</Label>
+                <Select id="groupId" className="mt-1.5" {...form.register("groupId")}>
+                  <option value="">No group</option>
+                  {(groupsQuery.data?.items ?? []).map((group) => (
+                    <option key={group._id} value={group._id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="rewardPoints">Reward points</Label>
+                <Input id="rewardPoints" type="number" min={0} className="mt-1.5" {...form.register("rewardPoints", { valueAsNumber: true })} />
+              </div>
             </div>
             <div>
               <Label htmlFor="notes">Notes</Label>
@@ -237,6 +285,29 @@ export function CustomersManager() {
         }}
         onConfirm={onDelete}
       />
+
+      <Dialog open={!!historyTarget} onOpenChange={() => setHistoryTarget(null)}>
+        <DialogContent title="Purchase history" description={historyTarget?.name}>
+          <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
+            {(historyQuery.data?.items ?? []).length === 0 ? (
+              <p className="text-zinc-500">No sales for this customer yet.</p>
+            ) : (
+              historyQuery.data!.items.map((sale: { _id: string; invoiceNumber: string; grandTotal: number; paymentMethod: string; status: string; createdAt?: string }) => (
+                <div key={sale._id} className="flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2">
+                  <div>
+                    <div className="font-medium">{sale.invoiceNumber}</div>
+                    <div className="text-xs text-zinc-500 capitalize">{sale.paymentMethod} · {sale.status}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium">{currency(sale.grandTotal)}</div>
+                    <div className="text-xs text-zinc-500">{formatPakistanDate(sale.createdAt, "")}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

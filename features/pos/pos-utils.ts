@@ -1,5 +1,28 @@
 import type { CartItem, PaymentMethod } from "@/types";
+import { requiresFullPayment } from "@/types";
 import { createInvoiceNumber, totals } from "@/lib/utils";
+
+const PAYMENT_REFERENCE_MAX = 120;
+
+export function validatePaymentReference(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "Payment reference is required.";
+  if (/^\d{4}$/.test(trimmed)) return null;
+  if (trimmed.length < 3) {
+    return "Enter at least 3 characters (transaction ID, last 4 digits, or bank ref).";
+  }
+  if (trimmed.length > PAYMENT_REFERENCE_MAX) {
+    return `Payment reference must be ${PAYMENT_REFERENCE_MAX} characters or less.`;
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9\s\-_/]*$/.test(trimmed)) {
+    return "Use letters, numbers, spaces, or - _ / only.";
+  }
+  return null;
+}
+
+export function normalizePaymentReference(value: string) {
+  return value.trim();
+}
 
 type BuildSaleParams = {
   invoiceNumber: string;
@@ -7,8 +30,17 @@ type BuildSaleParams = {
   items: CartItem[];
   discountType: "flat" | "percentage";
   discountValue: number;
+  couponCode?: string;
+  couponDiscount?: number;
   paymentMethod: PaymentMethod;
   paidAmount: number;
+  orderNotes?: string;
+  paymentReference?: string;
+  chequeNumber?: string;
+  bankName?: string;
+  chequeDate?: string | Date | null;
+  groupDiscount?: number;
+  pointsRedeemed?: number;
 };
 
 function lineTotal(item: CartItem) {
@@ -20,6 +52,18 @@ export function buildSalePayload(params: BuildSaleParams) {
   const subtotal = params.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const orderDiscount = params.discountType === "percentage" ? (subtotal * params.discountValue) / 100 : params.discountValue;
   const computed = totals(params.items, orderDiscount);
+  const couponDiscount = params.couponDiscount ?? 0;
+  const groupDiscount = params.groupDiscount ?? 0;
+  const pointsRedeemed = params.pointsRedeemed ?? 0;
+  const grandTotal = Math.max(computed.grandTotal - couponDiscount - groupDiscount - pointsRedeemed, 0);
+  const paidAmount = params.paymentMethod === "credit" ? 0 : requiresFullPayment(params.paymentMethod) ? grandTotal : params.paidAmount;
+  const noteParts = [
+    params.orderNotes?.trim(),
+    params.paymentReference?.trim() ? `Ref: ${normalizePaymentReference(params.paymentReference)}` : "",
+    params.couponCode ? `Coupon: ${params.couponCode}` : "",
+    groupDiscount > 0 ? `Group discount: ${groupDiscount}` : "",
+    pointsRedeemed > 0 ? `Points redeemed: ${pointsRedeemed}` : "",
+  ].filter(Boolean);
 
   return {
     invoiceNumber: params.invoiceNumber,
@@ -37,14 +81,22 @@ export function buildSalePayload(params: BuildSaleParams) {
     })),
     subtotal: computed.subtotal,
     discountType: params.discountType,
-    discountValue: params.discountValue,
+    discountValue: params.discountValue + couponDiscount + groupDiscount + pointsRedeemed,
     taxTotal: computed.tax,
-    grandTotal: computed.grandTotal,
-    paidAmount: params.paymentMethod === "credit" ? 0 : params.paidAmount,
-    changeDue: Math.max(params.paidAmount - computed.grandTotal, 0),
+    grandTotal,
+    paidAmount,
+    changeDue: Math.max(paidAmount - grandTotal, 0),
     paymentMethod: params.paymentMethod,
     status: "completed" as const,
-    notes: "",
+    notes: noteParts.join(" · ") || "",
+    couponCode: params.couponCode ?? "",
+    pointsRedeemed,
+    groupDiscount,
+    chequeNumber: params.paymentMethod === "cheque" ? params.chequeNumber?.trim() ?? "" : "",
+    bankName: ["cheque", "bank"].includes(params.paymentMethod)
+      ? params.bankName?.trim() ?? ""
+      : "",
+    chequeDate: params.paymentMethod === "cheque" ? params.chequeDate ?? null : null,
   };
 }
 

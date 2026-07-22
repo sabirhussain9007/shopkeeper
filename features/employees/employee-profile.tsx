@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
 import { BlockLoader } from "@/components/ui/loader";
-import { currency } from "@/lib/utils";
+import { currency, formatPakistanDate } from "@/lib/utils";
 import type { EmployeeInput } from "@/types";
 
 type Employee = EmployeeInput & {
@@ -16,13 +16,6 @@ type Employee = EmployeeInput & {
   dateOfBirth?: string | Date | null;
   joiningDate?: string | Date;
 };
-
-function formatDate(value?: Date | string | null) {
-  if (!value) return "—";
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString();
-}
 
 function ProfileField({ label, value }: { label: string; value: string }) {
   return (
@@ -119,8 +112,8 @@ export function EmployeeProfile({ employeeId }: { employeeId: string }) {
               <ProfileField label="Department" value={employee.department} />
               <ProfileField label="Designation" value={employee.designation} />
               <ProfileField label="Salary" value={currency(employee.salary)} />
-              <ProfileField label="Date of Birth" value={formatDate(employee.dateOfBirth)} />
-              <ProfileField label="Joining Date" value={formatDate(employee.joiningDate)} />
+              <ProfileField label="Date of Birth" value={formatPakistanDate(employee.dateOfBirth)} />
+              <ProfileField label="Joining Date" value={formatPakistanDate(employee.joiningDate)} />
               <ProfileField label="Emergency Contact" value={employee.emergencyContact || "—"} />
             </div>
             <ProfileField label="Address" value={employee.address || "—"} />

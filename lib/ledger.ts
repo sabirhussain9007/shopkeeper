@@ -2,23 +2,57 @@ import { connectDb } from "@/lib/db";
 import { withShopFilter } from "@/lib/tenant";
 import { Customer, LedgerEntry } from "@/models";
 
-export async function recordPayment(customerId: string, amount: number, description: string, userId: string, shopId: string) {
+type PaymentMeta = {
+  paymentMethod?: string;
+  reference?: string;
+  bankName?: string;
+  chequeDate?: Date | null;
+  entryDate?: Date;
+};
+
+export async function recordPayment(
+  customerId: string,
+  amount: number,
+  description: string,
+  userId: string,
+  shopId: string,
+  meta: PaymentMeta = {},
+) {
   if (amount <= 0) return { ok: false as const, error: "Payment amount must be positive." };
   await connectDb();
-  const customer = await Customer.findOneAndUpdate(withShopFilter(shopId, { _id: customerId }), { $inc: { currentBalance: -amount } }, { new: true });
-  if (!customer) return { ok: false as const, error: "Customer not found" };
-  await LedgerEntry.create({
+  const customerDoc = await Customer.findOneAndUpdate(withShopFilter(shopId, { _id: customerId }), { $inc: { currentBalance: -amount } }, { new: true });
+  if (!customerDoc) return { ok: false as const, error: "Customer not found" };
+  const entry = await LedgerEntry.create({
     shopId,
     customer: customerId,
     type: "payment_received",
     debit: 0,
     credit: amount,
-    balance: customer.currentBalance,
+    balance: customerDoc.currentBalance,
     description,
-    entryDate: new Date(),
+    entryDate: meta.entryDate ?? new Date(),
+    paymentMethod: meta.paymentMethod as "cash" | "cheque" | "bank" | "easypaisa" | "jazzcash" | "card" | undefined,
+    reference: meta.reference?.trim() || undefined,
+    bankName: meta.bankName?.trim() || undefined,
+    chequeDate: meta.chequeDate ?? undefined,
     createdBy: userId,
   });
-  return { ok: true as const, balance: customer.currentBalance };
+
+  const { syncCustomerPaymentAccounting } = await import("@/lib/accounting-sync");
+  await syncCustomerPaymentAccounting(
+    shopId,
+    userId,
+    String(entry._id),
+    customerDoc.name ?? "Customer",
+    amount,
+    meta.paymentMethod ?? "cash",
+    meta.reference ?? "",
+    meta.bankName ?? "",
+    meta.chequeDate,
+    meta.entryDate,
+  );
+
+  return { ok: true as const, balance: customerDoc.currentBalance, entryId: String(entry._id) };
 }
 
 export async function recordAdjustment(

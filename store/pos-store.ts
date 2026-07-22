@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { CartItem, HeldOrder, PaymentMethod } from "@/types";
@@ -13,10 +14,13 @@ type PosState = {
   paymentMethod: PaymentMethod;
   discountType: "flat" | "percentage";
   discountValue: number;
+  couponCode?: string;
+  couponDiscount: number;
   paidAmount: number;
   addItem: (item: CartItem) => void;
   setCustomer: (customerId?: string) => void;
   setPaymentMethod: (paymentMethod: PaymentMethod) => void;
+  setCoupon: (code?: string, discount?: number) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   removeItem: (productId: string) => void;
   holdOrder: (name: string) => void;
@@ -37,6 +41,7 @@ export const usePosStore = create<PosState>()(
       paymentMethod: "cash",
       discountType: "flat",
       discountValue: 0,
+      couponDiscount: 0,
       paidAmount: 0,
       addItem: (item) =>
         set((state) => {
@@ -49,6 +54,7 @@ export const usePosStore = create<PosState>()(
         }),
       setCustomer: (customerId) => set({ customerId }),
       setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+      setCoupon: (couponCode, couponDiscount = 0) => set({ couponCode, couponDiscount }),
       updateQuantity: (productId, quantity) => set((state) => ({ items: state.items.map((item) => (item.productId === productId ? { ...item, quantity: Math.max(1, Math.min(quantity, item.stockAvailable)) } : item)) })),
       removeItem: (productId) => set((state) => ({ items: state.items.filter((item) => item.productId !== productId) })),
       holdOrder: (name) => set((state) => ({ heldOrders: [...state.heldOrders, { id: crypto.randomUUID(), name, customerId: state.customerId, items: state.items, discountType: state.discountType, discountValue: state.discountValue, createdAt: new Date().toISOString() }], items: [], invoiceNumber: createInvoiceNumber() })),
@@ -57,7 +63,7 @@ export const usePosStore = create<PosState>()(
         if (!order) return state;
         return { items: order.items, customerId: order.customerId, discountType: order.discountType, discountValue: order.discountValue, heldOrders: state.heldOrders.filter((held) => held.id !== id) };
       }),
-      voidOrder: () => set({ invoiceNumber: createInvoiceNumber(), customerId: undefined, items: [], discountType: "flat", discountValue: 0, paidAmount: 0 }),
+      voidOrder: () => set({ invoiceNumber: createInvoiceNumber(), customerId: undefined, items: [], discountType: "flat", discountValue: 0, couponCode: undefined, couponDiscount: 0, paidAmount: 0 }),
       setDiscount: (discountType, discountValue) => set({ discountType, discountValue }),
       setPaidAmount: (paidAmount) => set({ paidAmount }),
       ensureInvoiceNumber: () => {
@@ -70,13 +76,32 @@ export const usePosStore = create<PosState>()(
         const subtotal = state.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
         const orderDiscount = state.discountType === "percentage" ? (subtotal * state.discountValue) / 100 : state.discountValue;
         const result = totals(state.items, orderDiscount);
-        return { ...result, changeDue: Math.max(state.paidAmount - result.grandTotal, 0) };
+        const grandTotal = Math.max(result.grandTotal - (state.couponDiscount ?? 0), 0);
+        return { ...result, grandTotal, changeDue: Math.max(state.paidAmount - grandTotal, 0) };
       },
     }),
     {
       name: "shopkeeper-pos-v1",
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ invoiceNumber: state.invoiceNumber, customerId: state.customerId, items: state.items, heldOrders: state.heldOrders, paymentMethod: state.paymentMethod, discountType: state.discountType, discountValue: state.discountValue, paidAmount: state.paidAmount }),
+      partialize: (state) => ({ invoiceNumber: state.invoiceNumber, customerId: state.customerId, items: state.items, heldOrders: state.heldOrders, paymentMethod: state.paymentMethod, discountType: state.discountType, discountValue: state.discountValue, couponCode: state.couponCode, couponDiscount: state.couponDiscount, paidAmount: state.paidAmount }),
+      skipHydration: true,
     },
   ),
 );
+
+export function usePosStoreRehydration() {
+  useEffect(() => {
+    const finish = () => {
+      usePosStore.getState().ensureInvoiceNumber();
+    };
+
+    const unsub = usePosStore.persist.onFinishHydration(finish);
+    if (usePosStore.persist.hasHydrated()) {
+      finish();
+    } else {
+      void usePosStore.persist.rehydrate();
+    }
+
+    return unsub;
+  }, []);
+}

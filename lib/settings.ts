@@ -31,6 +31,9 @@ export const defaultSettings: SettingsInput = {
   receiptHeader: "",
   receiptFooter: "",
   thankYouMessage: "Thank you for shopping with us.",
+  timezone: "Asia/Karachi",
+  language: "en",
+  theme: "light",
   managerRoutes: [...DEFAULT_MANAGER_ROUTES],
   cashierRoutes: [...DEFAULT_CASHIER_ROUTES],
 };

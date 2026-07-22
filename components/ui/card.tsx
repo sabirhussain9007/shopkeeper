@@ -16,7 +16,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 export function Surface({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-950 shadow-sm", className)}
+      className={cn("min-w-0 rounded-2xl border border-zinc-200 bg-white p-6 text-zinc-950 shadow-sm", className)}
       {...props}
     />
   );

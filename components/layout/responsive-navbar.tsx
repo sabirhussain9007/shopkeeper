@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -11,6 +12,8 @@ import {
   CalendarCheck2,
   ClipboardList,
   CreditCard,
+  History,
+  Landmark,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -19,36 +22,58 @@ import {
   ReceiptText,
   ScrollText,
   Settings,
+  ShoppingBag,
   ShoppingCart,
   Store,
+  Tag,
+  Ticket,
   Users,
+  UsersRound,
   Wallet,
+  Warehouse,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { NotificationCenter } from "@/components/saas/notification-center";
 import { SubscriptionExpiryBadge } from "@/components/saas/subscription-expiry";
 import { cn } from "@/lib/utils";
 import type { NavRouteId } from "@/lib/nav-access";
 import type { Role } from "@/types";
 
+const GlobalSearch = dynamic(() => import("@/components/layout/global-search").then((module) => module.GlobalSearch), {
+  ssr: false,
+});
+
+const NotificationCenter = dynamic(
+  () => import("@/components/saas/notification-center").then((module) => module.NotificationCenter),
+  { ssr: false },
+);
+
 const iconByRoute: Record<NavRouteId, LucideIcon> = {
   dashboard: LayoutDashboard,
   inventory: Boxes,
   categories: ClipboardList,
+  brands: Tag,
+  warehouses: Warehouse,
   customers: Users,
-  suppliers: Building2,
+  "customer-groups": UsersRound,
+  coupons: Ticket,
+  vendors: Building2,
   pos: ShoppingCart,
   ledger: CreditCard,
   sales: ReceiptText,
   purchases: PackagePlus,
+  "spot-purchases": ShoppingBag,
   employees: Users,
   attendance: CalendarCheck2,
   salaries: Banknote,
   expenses: Wallet,
+  accounting: Landmark,
+  bank: Building2,
   activity: ScrollText,
+  "login-history": History,
   reports: BarChart3,
   settings: Settings,
 };
@@ -57,46 +82,62 @@ const navMeta: Array<{ id: NavRouteId; label: string; href: string }> = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard" },
   { id: "inventory", label: "Inventory", href: "/inventory" },
   { id: "categories", label: "Categories", href: "/categories" },
+  { id: "brands", label: "Brands", href: "/brands" },
+  { id: "warehouses", label: "Warehouses", href: "/warehouses" },
   { id: "customers", label: "Customers", href: "/customers" },
-  { id: "suppliers", label: "Suppliers", href: "/suppliers" },
+  { id: "customer-groups", label: "Customer Groups", href: "/customer-groups" },
+  { id: "coupons", label: "Coupons", href: "/coupons" },
+  { id: "vendors", label: "Vendors", href: "/vendors" },
   { id: "pos", label: "POS", href: "/pos" },
   { id: "ledger", label: "Ledger", href: "/ledger" },
   { id: "sales", label: "Sales", href: "/sales" },
   { id: "purchases", label: "Purchases", href: "/purchases" },
+  { id: "spot-purchases", label: "Spot Purchases", href: "/spot-purchases" },
   { id: "employees", label: "Employees", href: "/employees" },
   { id: "attendance", label: "Attendance", href: "/attendance" },
   { id: "salaries", label: "Salaries", href: "/salaries" },
   { id: "expenses", label: "Expenses", href: "/expenses" },
+  { id: "accounting", label: "Accounting", href: "/accounting" },
+  { id: "bank", label: "Bank", href: "/bank" },
   { id: "activity", label: "Activity Logs", href: "/activity" },
+  { id: "login-history", label: "Login History", href: "/login-history" },
   { id: "reports", label: "Reports", href: "/reports" },
   { id: "settings", label: "Settings", href: "/settings" },
 ];
 
 const navGroups = [
   { label: "Main", items: ["Dashboard", "POS"] },
-  { label: "Inventory", items: ["Inventory", "Categories", "Suppliers", "Purchases"] },
-  { label: "Customers", items: ["Customers", "Ledger", "Sales"] },
+  { label: "Inventory", items: ["Inventory", "Categories", "Brands", "Warehouses", "Vendors", "Purchases", "Spot Purchases"] },
+  { label: "Customers", items: ["Customers", "Customer Groups", "Coupons", "Ledger", "Sales"] },
   { label: "HR", items: ["Employees", "Attendance", "Salaries"] },
-  { label: "Finance", items: ["Expenses"] },
+  { label: "Finance", items: ["Expenses", "Accounting", "Bank"] },
   { label: "Reports", items: ["Reports"] },
-  { label: "Admin", items: ["Activity Logs", "Settings"] },
+  { label: "Admin", items: ["Activity Logs", "Login History", "Settings"] },
 ] as const;
 
 const adminRoutes: NavRouteId[] = [
   "dashboard",
   "inventory",
   "categories",
+  "brands",
+  "warehouses",
   "customers",
-  "suppliers",
+  "customer-groups",
+  "coupons",
+  "vendors",
   "pos",
   "ledger",
   "sales",
   "purchases",
+  "spot-purchases",
   "employees",
   "attendance",
   "salaries",
   "expenses",
+  "accounting",
+  "bank",
   "activity",
+  "login-history",
   "reports",
   "settings",
 ];
@@ -124,27 +165,29 @@ export function ResponsiveNavbar({
   const [open, setOpen] = useState(false);
   const [dropdown, setDropdown] = useState<string | null>(null);
 
-  const routes =
-    role === "admin"
-      ? adminRoutes
-      : allowedRoutes && allowedRoutes.length > 0
-        ? allowedRoutes
-        : role === "cashier"
-          ? (["pos", "sales"] as NavRouteId[])
-          : role === "manager"
-            ? (adminRoutes.filter((id) => id !== "settings" && id !== "activity") as NavRouteId[])
-            : [];
+  const routes = useMemo(() => {
+    if (role === "admin") return adminRoutes;
+    if (allowedRoutes && allowedRoutes.length > 0) return allowedRoutes;
+    if (role === "cashier") return ["pos", "sales"] as NavRouteId[];
+    if (role === "manager") return adminRoutes.filter((id) => id !== "settings" && id !== "activity") as NavRouteId[];
+    return [];
+  }, [role, allowedRoutes]);
 
-  const links = navMeta
-    .filter((item) => routes.includes(item.id))
-    .map((item) => ({ ...item, icon: iconByRoute[item.id] }));
+  const links = useMemo(
+    () => navMeta.filter((item) => routes.includes(item.id)).map((item) => ({ ...item, icon: iconByRoute[item.id] })),
+    [routes],
+  );
 
-  const groupedLinks = navGroups
-    .map((group) => ({
-      ...group,
-      links: links.filter((item) => group.items.includes(item.label as never)),
-    }))
-    .filter((group) => group.links.length > 0);
+  const groupedLinks = useMemo(
+    () =>
+      navGroups
+        .map((group) => ({
+          ...group,
+          links: links.filter((item) => group.items.includes(item.label as never)),
+        }))
+        .filter((group) => group.links.length > 0),
+    [links],
+  );
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -178,6 +221,8 @@ export function ResponsiveNavbar({
           </Link>
 
           <div className="ml-auto hidden min-w-0 items-center justify-end gap-2 md:flex">
+            <GlobalSearch />
+            <ThemeToggle />
             {typeof remainingDays === "number" && remainingDays <= 3 ? (
               <SubscriptionExpiryBadge remainingDays={remainingDays} variant="badge" />
             ) : null}
