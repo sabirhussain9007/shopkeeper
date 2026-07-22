@@ -42,9 +42,57 @@ export function usePosSettings() {
     queryFn: async () => {
       const response = await fetch("/api/pos/settings");
       if (!response.ok) {
-        return { businessName: "Shopkeeper", logo: "", address: "", phone: "", email: "", gstVatNumber: "", ntn: "", receiptSize: "80mm" as const, receiptLogoAlign: "center" as const, receiptHeader: "", receiptFooter: "", thankYouMessage: "Thank you for shopping with us." };
+        return {
+          businessName: "Shopkeeper",
+          logo: "",
+          address: "",
+          phone: "",
+          email: "",
+          gstVatNumber: "",
+          ntn: "",
+          taxLabel: "Tax",
+          showTaxOnReceipt: true,
+          receiptTitle: "Sales Receipt",
+          receiptSize: "80mm" as const,
+          receiptLogoAlign: "center" as const,
+          receiptHeader: "",
+          receiptFooter: "",
+          thankYouMessage: "Thank you for shopping with us.",
+          showReceiptLogo: true,
+          showReceiptBarcode: true,
+          showCashierOnReceipt: true,
+          showCustomerOnReceipt: true,
+          showSkuOnReceipt: false,
+          showTaxNumbersOnReceipt: true,
+          showEmailOnReceipt: false,
+          autoPrintReceipt: false,
+        };
       }
-      return response.json() as Promise<{ businessName: string; logo: string; address: string; phone: string; email: string; gstVatNumber: string; ntn: string; receiptSize: "58mm" | "80mm" | "a4"; receiptLogoAlign: "left" | "center" | "right"; receiptHeader: string; receiptFooter: string; thankYouMessage: string }>;
+      return response.json() as Promise<{
+        businessName: string;
+        logo: string;
+        address: string;
+        phone: string;
+        email: string;
+        gstVatNumber: string;
+        ntn: string;
+        taxLabel: string;
+        showTaxOnReceipt: boolean;
+        receiptTitle: string;
+        receiptSize: "58mm" | "80mm" | "a4";
+        receiptLogoAlign: "left" | "center" | "right";
+        receiptHeader: string;
+        receiptFooter: string;
+        thankYouMessage: string;
+        showReceiptLogo: boolean;
+        showReceiptBarcode: boolean;
+        showCashierOnReceipt: boolean;
+        showCustomerOnReceipt: boolean;
+        showSkuOnReceipt: boolean;
+        showTaxNumbersOnReceipt: boolean;
+        showEmailOnReceipt: boolean;
+        autoPrintReceipt: boolean;
+      }>;
     },
     staleTime: 60_000,
   });

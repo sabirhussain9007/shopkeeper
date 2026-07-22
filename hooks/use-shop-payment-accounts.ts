@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ShopPaymentAccount } from "@/lib/payment-accounts";
 
-type AccountType = "bank";
+type AccountType = "bank" | "easypaisa" | "jazzcash";
 
 export function useShopPaymentAccounts(options?: { accountType?: AccountType; enabled?: boolean }) {
   const accountType = options?.accountType;

@@ -7,6 +7,10 @@ const handlers = crudHandlers({
   schema: categorySchema,
   permission: "inventory:write",
   searchFields: ["name"],
+  activityEntity: "category",
+  uniqueFields: [{ field: "name", caseInsensitive: true }],
+  includeDeleted: true,
+  listSort: { sortOrder: 1, name: 1, createdAt: 1 },
 });
 
 export const GET = handlers.GET;

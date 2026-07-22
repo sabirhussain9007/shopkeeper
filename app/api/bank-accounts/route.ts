@@ -16,15 +16,13 @@ export async function GET(req: NextRequest) {
   const filter: Record<string, unknown> = withShopFilter(shopId, { deletedAt: { $exists: false } });
   if (params.status) filter.status = params.status;
   const accountType = req.nextUrl.searchParams.get("accountType");
-  if (accountType && accountType === "bank") {
-    if (accountType === "bank") {
-      filter.$and = [
-        ...(Array.isArray(filter.$and) ? filter.$and : []),
-        { $or: [{ accountType: "bank" }, { accountType: { $exists: false } }] },
-      ];
-    } else {
-      filter.accountType = accountType;
-    }
+  if (accountType === "bank") {
+    filter.$and = [
+      ...(Array.isArray(filter.$and) ? filter.$and : []),
+      { $or: [{ accountType: "bank" }, { accountType: { $exists: false } }] },
+    ];
+  } else if (accountType === "easypaisa" || accountType === "jazzcash") {
+    filter.accountType = accountType;
   }
   if (query.q) {
     filter.$or = ["name", "accountTitle", "accountNumber", "branch", "iban"].map((field) => ({

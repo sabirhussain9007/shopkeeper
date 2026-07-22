@@ -82,6 +82,7 @@ export function SalesManager() {
   const [bounceSubmitting, setBounceSubmitting] = useState(false);
   const [bounceConfirmOpen, setBounceConfirmOpen] = useState(false);
   const [pendingBouncePayload, setPendingBouncePayload] = useState<ReturnType<typeof saleChequeBounceSchema.parse> | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const settings = useQuery({
     queryKey: ["pos-settings"],
     queryFn: async () => {
@@ -95,7 +96,7 @@ export function SalesManager() {
   const dailySummary = useQuery({
     queryKey: ["sales-daily-summary"],
     queryFn: async () => {
-      const response = await fetch("/api/sales/daily-summary");
+      const response = await fetch("/api/sales/daily-summary", { cache: "no-store" });
       if (!response.ok) throw new Error("Unable to load daily summary");
       return response.json() as Promise<{ count: number; total: number; cash: number; credit: number; split: number; refunded: number }>;
     },
@@ -117,6 +118,21 @@ export function SalesManager() {
   });
 
   const onSearch = useCallback((q: string) => setParams((p) => ({ ...p, q, page: 1 })), [setParams]);
+
+  const refreshPage = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sales"] }),
+        queryClient.invalidateQueries({ queryKey: ["sales-daily-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["sale-detail"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to refresh sales.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const openDetail = (id: string) => {
     setSelectedId(id);
@@ -320,7 +336,7 @@ export function SalesManager() {
           <h2 className="text-3xl font-semibold tracking-tight">Sales</h2>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">Sales history, invoices, refunds, and daily register summary.</p>
         </div>
-        <Button variant="secondary" onClick={() => dailySummary.refetch()}>
+        <Button type="button" variant="secondary" loading={refreshing} loadingLabel="Refreshing..." onClick={() => void refreshPage()}>
           <RefreshCcw className="h-4 w-4" />
           Refresh
         </Button>

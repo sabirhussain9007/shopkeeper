@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { BankAccountsPanel } from "@/features/bank/bank-accounts-panel";
-import { sourceTypeLabel } from "@/lib/bank-labels";
+import { sourceTypeLabel, shopAccountTypeLabel } from "@/lib/bank-labels";
 import { currency, formatPakistanDate, pakistanTodayKey } from "@/lib/utils";
 import type { BankAccountInput } from "@/types";
 
@@ -69,6 +69,7 @@ export function BankManager() {
     limit: 50,
   });
   const [backfillPending, setBackfillPending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositType, setDepositType] = useState<"cash" | "cheque">("cash");
   const [depositAmount, setDepositAmount] = useState("");
@@ -90,7 +91,7 @@ export function BankManager() {
   const list = useQuery({
     queryKey: ["bank-transactions", params],
     queryFn: async () => {
-      const response = await fetch(`/api/bank/transactions?${queryString}`);
+      const response = await fetch(`/api/bank/transactions?${queryString}`, { cache: "no-store" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error ?? "Unable to load bank transactions");
@@ -100,9 +101,9 @@ export function BankManager() {
   });
 
   const bankAccounts = useQuery({
-    queryKey: ["bank-accounts", "active", "bank"],
+    queryKey: ["bank-accounts", "active"],
     queryFn: async () => {
-      const response = await fetch("/api/bank-accounts?status=active&limit=100&accountType=bank");
+      const response = await fetch("/api/bank-accounts?status=active&limit=100");
       if (!response.ok) throw new Error("Unable to load bank accounts");
       return response.json() as Promise<{ items: RegisteredBankAccount[] }>;
     },
@@ -200,6 +201,20 @@ export function BankManager() {
   const onBankFilter = useCallback((bankName: string) => setParams((p) => ({ ...p, bankName: bankName || undefined, page: 1 })), []);
   const onSourceFilter = useCallback((sourceType: string) => setParams((p) => ({ ...p, sourceType: sourceType || undefined, page: 1 })), []);
 
+  const refreshPage = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["bank-transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["bank-accounts"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to refresh bank data.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const items = list.data?.items ?? [];
   const summary = list.data?.summary ?? { totalBalance: 0, banks: [], totals: { moneyIn: 0, moneyOut: 0 } };
   const bankOptions = summary.banks.map((b) => b.bankName);
@@ -219,7 +234,7 @@ export function BankManager() {
             <Download className="h-4 w-4" />
             Sync all transactions
           </Button>
-          <Button variant="secondary" onClick={() => list.refetch()}>
+          <Button type="button" variant="secondary" loading={refreshing} loadingLabel="Refreshing..." onClick={() => void refreshPage()}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
@@ -386,13 +401,13 @@ export function BankManager() {
               </div>
             </div>
             <div>
-              <Label>Bank account</Label>
+              <Label>Account</Label>
               {activeAccounts.length > 0 ? (
                 <Select className="mt-1.5" value={depositBankName} onChange={(e) => setDepositBankName(e.target.value)}>
-                  <option value="">Select bank account</option>
+                  <option value="">Select account</option>
                   {activeAccounts.map((account) => (
                     <option key={account._id} value={account.name}>
-                      {account.name} · {account.accountNumber}
+                      {shopAccountTypeLabel(account.accountType)} · {account.name} · {account.accountNumber}
                     </option>
                   ))}
                 </Select>
@@ -400,14 +415,14 @@ export function BankManager() {
                 <>
                   <Input
                     className="mt-1.5"
-                    placeholder="e.g. HBL, Meezan Bank"
+                    placeholder="e.g. HBL, EasyPaisa, JazzCash"
                     value={depositBankName}
                     onChange={(e) => setDepositBankName(e.target.value)}
                   />
                   {isAdmin ? (
-                    <p className="mt-1 text-xs text-amber-700">Add a bank account above first for easier selection.</p>
+                    <p className="mt-1 text-xs text-amber-700">Add an account above first for easier selection.</p>
                   ) : (
-                    <p className="mt-1 text-xs text-amber-700">Ask your admin to register bank accounts.</p>
+                    <p className="mt-1 text-xs text-amber-700">Ask your admin to register bank and digital accounts.</p>
                   )}
                 </>
               )}

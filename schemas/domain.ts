@@ -8,14 +8,21 @@ import {
   isValidCnic,
   isValidPakistanIban,
   isValidPakistanMobile,
+  isValidWalletAccountNumber,
   normalizeBankAccountNumber,
   normalizeCnic,
   normalizePakistanIban,
   normalizePakistanMobile,
+  normalizeWalletAccountNumber,
+  WALLET_ACCOUNT_ERROR,
 } from "@/lib/pakistan-validators";
 import { permissions, shopRoles } from "@/types";
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
+const optionalObjectId = z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? undefined : value),
+  objectId.optional(),
+);
 const money = z.coerce.number().min(0);
 const status = z.enum(["active", "inactive"]);
 
@@ -93,7 +100,7 @@ export const createShopSchema = z
 export const categorySchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional().default(""),
-  parentId: objectId.optional(),
+  parentId: optionalObjectId,
   icon: z.string().max(80).optional().default(""),
   image: z.string().max(2_500_000).optional().default(""),
   sortOrder: z.coerce.number().int().default(0),
@@ -126,9 +133,9 @@ export const productSchema = z.object({
   productName: z.string().min(2).max(180),
   sku: z.string().min(2).max(80).toUpperCase(),
   barcode: z.string().max(80).optional().default(""),
-  category: objectId.optional(),
+  category: optionalObjectId,
   brand: z.string().max(120).optional().default(""),
-  brandId: objectId.optional(),
+  brandId: optionalObjectId,
   unit: z.string().min(1).max(40).default("pcs"),
   purchasePrice: money,
   costPrice: money.default(0),
@@ -139,8 +146,8 @@ export const productSchema = z.object({
   maxStock: z.coerce.number().min(0).default(0),
   expiryDate: z.coerce.date().optional().nullable(),
   qrCode: z.string().max(200).optional().default(""),
-  warehouse: objectId.optional(),
-  supplier: objectId.optional(),
+  warehouse: optionalObjectId,
+  supplier: optionalObjectId,
   productImage: z.string().url().optional().or(z.literal("")).default(""),
   description: z.string().max(1000).optional().default(""),
   status: status.default("active"),
@@ -197,8 +204,17 @@ export const saleSchema = z.object({
   bankName: z.string().max(120).optional().default(""),
   chequeDate: z.coerce.date().optional().nullable(),
 }).superRefine((data, ctx) => {
-  if (data.paymentMethod === "bank" && !data.bankName?.trim()) {
+  if ((data.paymentMethod === "bank" || data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash") && !data.bankName?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered payment account.", path: ["bankName"] });
+  }
+  if (data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash") {
+    if (!/Ref:\s*\d{4}\b/.test(data.notes ?? "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Last 4 digits are required for digital wallet payments.",
+        path: ["notes"],
+      });
+    }
   }
   if (data.paymentMethod !== "cheque") return;
   if (!data.customer) {
@@ -245,11 +261,31 @@ export const purchaseSchema = z.object({
   discountValue: money.default(0),
   salesTaxType: z.enum(["flat", "percentage"]).default("flat"),
   salesTaxValue: money.default(0),
-  paymentMethod: z.enum(["cash", "cheque", "credit"]).default("cash"),
+  paymentMethod: z.enum(["cash", "cheque", "credit", "easypaisa", "jazzcash"]).default("cash"),
   chequeNumber: z.string().max(80).optional().default(""),
   chequeDate: z.coerce.date().optional().nullable(),
   bankName: z.string().max(120).optional().default(""),
 }).superRefine((data, ctx) => {
+  if (data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash") {
+    const requiresWalletDetails = data.purchaseKind === "spot" || (data.paidAmount ?? 0) > 0;
+    if (!requiresWalletDetails) return;
+    if (!data.bankName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a registered payment account.",
+        path: ["bankName"],
+      });
+    }
+    const lastFour = data.chequeNumber?.trim() ?? "";
+    if (!/^\d{4}$/.test(lastFour)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Last 4 digits are required for digital wallet payments.",
+        path: ["chequeNumber"],
+      });
+    }
+    return;
+  }
   if (data.paymentMethod !== "cheque") return;
   const requiresChequeDetails = data.purchaseKind === "spot" || (data.paidAmount ?? 0) > 0;
   if (!requiresChequeDetails) return;
@@ -475,11 +511,23 @@ export const settingsSchema = z.object({
     .default(""),
   currency: z.string().min(3).max(3).default("PKR"),
   taxRate: z.coerce.number().min(0).max(100).default(0),
+  taxLabel: z.string().min(1).max(40).default("Tax"),
+  taxInclusive: z.boolean().default(false),
+  showTaxOnReceipt: z.boolean().default(true),
+  receiptTitle: z.string().max(80).default("Sales Receipt"),
   receiptSize: z.enum(["58mm", "80mm", "a4"]).default("80mm"),
   receiptLogoAlign: z.enum(["left", "center", "right"]).default("center"),
   receiptHeader: z.string().max(500).default(""),
   receiptFooter: z.string().max(500).default(""),
   thankYouMessage: z.string().max(200).default("Thank you for shopping with us."),
+  showReceiptLogo: z.boolean().default(true),
+  showReceiptBarcode: z.boolean().default(true),
+  showCashierOnReceipt: z.boolean().default(true),
+  showCustomerOnReceipt: z.boolean().default(true),
+  showSkuOnReceipt: z.boolean().default(false),
+  showTaxNumbersOnReceipt: z.boolean().default(true),
+  showEmailOnReceipt: z.boolean().default(false),
+  autoPrintReceipt: z.boolean().default(false),
   timezone: z.string().max(80).default("Asia/Karachi"),
   language: z.string().max(10).default("en"),
   theme: z.enum(["light", "dark", "system"]).default("light"),
@@ -590,7 +638,7 @@ export const brandSchema = z.object({
   status: status.default("active"),
 });
 
-export const shopAccountTypes = ["bank"] as const;
+export const shopAccountTypes = ["bank", "easypaisa", "jazzcash"] as const;
 
 export const bankAccountBaseSchema = z.object({
   accountType: z.enum(shopAccountTypes).default("bank"),
@@ -604,6 +652,17 @@ export const bankAccountBaseSchema = z.object({
 });
 
 export const bankAccountFieldsSchema = bankAccountBaseSchema.superRefine((data, ctx) => {
+  const isWallet = data.accountType === "easypaisa" || data.accountType === "jazzcash";
+  if (isWallet) {
+    if (!isValidWalletAccountNumber(data.accountNumber)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: WALLET_ACCOUNT_ERROR,
+        path: ["accountNumber"],
+      });
+    }
+    return;
+  }
   if (!isValidBankAccountNumber(data.accountNumber)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -621,13 +680,16 @@ export const bankAccountFieldsSchema = bankAccountBaseSchema.superRefine((data, 
   }
 });
 
-export const bankAccountSchema = bankAccountFieldsSchema.transform((data) => ({
-  ...data,
-  accountNumber: normalizeBankAccountNumber(data.accountNumber),
-  branch: (data.branch ?? "").trim(),
-  iban: normalizePakistanIban(data.iban ?? ""),
-  notes: (data.notes ?? "").trim(),
-}));
+export const bankAccountSchema = bankAccountFieldsSchema.transform((data) => {
+  const isWallet = data.accountType === "easypaisa" || data.accountType === "jazzcash";
+  return {
+    ...data,
+    accountNumber: isWallet ? normalizeWalletAccountNumber(data.accountNumber) : normalizeBankAccountNumber(data.accountNumber),
+    branch: isWallet ? "" : (data.branch ?? "").trim(),
+    iban: isWallet ? "" : normalizePakistanIban(data.iban ?? ""),
+    notes: (data.notes ?? "").trim(),
+  };
+});
 
 export const warehouseSchema = z.object({
   name: z.string().min(2).max(120),

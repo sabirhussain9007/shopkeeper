@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { connectDb } from "@/lib/db";
 import { withShopFilter } from "@/lib/tenant";
-import { Product, Purchase, PurchaseItem, StockAdjustment, Supplier, SupplierLedgerEntry } from "@/models";
+import { AccountingEntry, Product, Purchase, PurchaseItem, StockAdjustment, Supplier, SupplierLedgerEntry } from "@/models";
 import type { PurchaseInput } from "@/types";
 import { syncPurchaseAccounting, syncPurchaseAdvancePayment, syncPurchaseReceiveAccounting } from "@/lib/accounting-sync";
 import { aggregatePurchaseLines, calcPurchaseLineAmounts, type PurchaseDiscountType } from "@/lib/purchase-line-math";
@@ -65,9 +65,15 @@ export async function createPurchase(input: PurchaseInput, userId: string, shopI
     adjustmentAmount: 0,
     paidAmount: input.paidAmount,
     paymentMethod: input.paymentMethod ?? "cash",
-    chequeNumber: input.paymentMethod === "cheque" ? input.chequeNumber?.trim() || "" : "",
+    chequeNumber:
+      input.paymentMethod === "cheque" || input.paymentMethod === "easypaisa" || input.paymentMethod === "jazzcash"
+        ? input.chequeNumber?.trim() || ""
+        : "",
     chequeDate: input.paymentMethod === "cheque" ? input.chequeDate ?? undefined : undefined,
-    bankName: input.paymentMethod === "cheque" ? input.bankName?.trim() || "" : "",
+    bankName:
+      input.paymentMethod === "cheque" || input.paymentMethod === "easypaisa" || input.paymentMethod === "jazzcash"
+        ? input.bankName?.trim() || ""
+        : "",
     status: input.status,
     purchaseKind: input.purchaseKind ?? "order",
     createdBy: userId,
@@ -144,9 +150,15 @@ export async function createSpotPurchase(input: PurchaseInput, userId: string, s
     adjustmentAmount: 0,
     paidAmount: input.paidAmount,
     paymentMethod: input.paymentMethod ?? "cash",
-    chequeNumber: input.paymentMethod === "cheque" ? input.chequeNumber?.trim() || "" : "",
+    chequeNumber:
+      input.paymentMethod === "cheque" || input.paymentMethod === "easypaisa" || input.paymentMethod === "jazzcash"
+        ? input.chequeNumber?.trim() || ""
+        : "",
     chequeDate: input.paymentMethod === "cheque" ? input.chequeDate ?? undefined : undefined,
-    bankName: input.paymentMethod === "cheque" ? input.bankName?.trim() || "" : "",
+    bankName:
+      input.paymentMethod === "cheque" || input.paymentMethod === "easypaisa" || input.paymentMethod === "jazzcash"
+        ? input.bankName?.trim() || ""
+        : "",
     status: "received",
     purchaseKind: "spot",
     createdBy: userId,
@@ -618,6 +630,170 @@ export async function buyStockFromVendor(
     },
     totals: { lineSubtotal, taxes, grandTotal, paidAmount, unpaid },
   };
+}
+
+async function getSpotPurchaseOrError(purchaseId: string, shopId: string) {
+  await connectDb();
+  const purchase = await Purchase.findOne(
+    withShopFilter(shopId, { _id: purchaseId, purchaseKind: "spot", deletedAt: { $exists: false } }),
+  );
+  if (!purchase) return { ok: false as const, status: 404, error: "Spot purchase not found." };
+  return { ok: true as const, purchase };
+}
+
+async function clearPurchaseAccounting(shopId: string, purchaseId: string) {
+  await connectDb();
+  await AccountingEntry.deleteMany({
+    shopId,
+    $or: [{ sourceId: purchaseId }, { eventKey: { $regex: `^purchase:${purchaseId}:` } }],
+  });
+}
+
+async function revertSpotPurchaseStock(purchaseId: string, userId: string, shopId: string) {
+  const items = await PurchaseItem.find(withShopFilter(shopId, { purchase: purchaseId, deletedAt: { $exists: false } }));
+  const returnLines = items
+    .filter((item) => (item.quantity ?? 0) > 0)
+    .map((item) => ({ productId: String(item.product), quantity: item.quantity ?? 0 }));
+  if (returnLines.length === 0) return { ok: true as const };
+  return returnPurchase(purchaseId, userId, shopId, returnLines);
+}
+
+async function applySpotPurchaseStock(
+  shopId: string,
+  userId: string,
+  purchaseId: string,
+  supplierId: string,
+  normalizedProducts: ReturnType<typeof normalizePurchaseProducts>,
+) {
+  for (const item of normalizedProducts) {
+    const product = await Product.findOne(withShopFilter(shopId, { _id: item.product, deletedAt: { $exists: false } }));
+    if (!product) {
+      return { ok: false as const, error: `Product not found for ${item.name}.` };
+    }
+
+    const previousQuantity = product.quantity ?? 0;
+    const newQuantity = previousQuantity + item.quantity;
+    product.quantity = newQuantity;
+    product.purchasePrice = item.cost;
+    product.costPrice = item.cost;
+    product.supplier = new Types.ObjectId(supplierId);
+    product.updatedBy = new Types.ObjectId(userId);
+    await product.save();
+
+    await StockAdjustment.create({
+      shopId,
+      product: product._id,
+      type: "increase",
+      quantity: item.quantity,
+      previousQuantity,
+      newQuantity,
+      reason: `Spot purchase ${purchaseId}: +${item.quantity} ${product.unit ?? "pcs"} @ ${item.cost}`,
+      createdBy: userId,
+    });
+  }
+
+  return { ok: true as const };
+}
+
+export async function deleteSpotPurchase(purchaseId: string, userId: string, shopId: string) {
+  const found = await getSpotPurchaseOrError(purchaseId, shopId);
+  if (!found.ok) return found;
+
+  const reverted = await revertSpotPurchaseStock(purchaseId, userId, shopId);
+  if (!reverted.ok) return { ...reverted, status: reverted.status ?? 400 };
+
+  await clearPurchaseAccounting(shopId, purchaseId);
+  await PurchaseItem.deleteMany(withShopFilter(shopId, { purchase: purchaseId }));
+  await Purchase.findOneAndDelete(withShopFilter(shopId, { _id: purchaseId }));
+
+  return { ok: true as const };
+}
+
+export async function updateSpotPurchase(purchaseId: string, input: PurchaseInput, userId: string, shopId: string) {
+  const found = await getSpotPurchaseOrError(purchaseId, shopId);
+  if (!found.ok) return found;
+
+  const supplier = await Supplier.findOne(withShopFilter(shopId, { _id: input.supplier }));
+  if (!supplier) return { ok: false as const, error: "Supplier not found" };
+
+  const reverted = await revertSpotPurchaseStock(purchaseId, userId, shopId);
+  if (!reverted.ok) return reverted;
+
+  await clearPurchaseAccounting(shopId, purchaseId);
+  await PurchaseItem.deleteMany(withShopFilter(shopId, { purchase: purchaseId }));
+
+  const normalizedProducts = normalizePurchaseProducts(input.products);
+  const totals = aggregatePurchaseLines(normalizedProducts);
+
+  const purchase = await Purchase.findOneAndUpdate(
+    withShopFilter(shopId, { _id: purchaseId }),
+    {
+      supplier: input.supplier,
+      invoiceNumber: input.invoiceNumber?.trim() || "",
+      orderDate: input.orderDate ?? new Date(),
+      subtotal: totals.subtotal,
+      discountType: "flat",
+      discountValue: totals.discountAmount,
+      discountAmount: totals.discountAmount,
+      salesTaxType: "flat",
+      salesTaxValue: totals.salesTaxAmount,
+      salesTaxAmount: totals.salesTaxAmount,
+      taxes: totals.salesTaxAmount,
+      grandTotal: totals.grandTotal,
+      orderedGrandTotal: totals.grandTotal,
+      adjustmentAmount: 0,
+      paidAmount: input.paidAmount,
+      paymentMethod: input.paymentMethod ?? "cash",
+      chequeNumber: input.paymentMethod === "cheque" ? input.chequeNumber?.trim() || "" : "",
+      chequeDate: input.paymentMethod === "cheque" ? input.chequeDate ?? undefined : undefined,
+      bankName: input.paymentMethod === "cheque" ? input.bankName?.trim() || "" : "",
+      status: "received",
+      purchaseKind: "spot",
+      updatedBy: userId,
+    },
+    { new: true },
+  );
+  if (!purchase) return { ok: false as const, status: 404, error: "Spot purchase not found." };
+
+  await PurchaseItem.insertMany(
+    normalizedProducts.map((item) => ({
+      ...item,
+      shopId,
+      purchase: purchase._id,
+      createdBy: userId,
+    })),
+  );
+
+  const stockResult = await applySpotPurchaseStock(
+    shopId,
+    userId,
+    String(purchase._id),
+    input.supplier,
+    normalizedProducts,
+  );
+  if (!stockResult.ok) return stockResult;
+
+  const unpaid = Math.max((purchase.grandTotal ?? 0) - (purchase.paidAmount ?? 0), 0);
+  await recordSupplierCredit(
+    shopId,
+    String(purchase.supplier),
+    String(purchase._id),
+    unpaid,
+    userId,
+    `Spot purchase ${purchase._id}`,
+    "purchase",
+  );
+  await syncPurchaseAccounting(shopId, userId, {
+    id: String(purchase._id),
+    grandTotal: purchase.grandTotal ?? 0,
+    paidAmount: purchase.paidAmount ?? 0,
+    paymentMethod: purchase.paymentMethod,
+    chequeNumber: purchase.chequeNumber ?? undefined,
+    chequeDate: purchase.chequeDate,
+    bankName: purchase.bankName ?? undefined,
+  });
+
+  return { ok: true as const, purchase };
 }
 
 export async function listPurchases(page = 1, limit = 20, shopId: string, kind: "order" | "spot" = "order") {

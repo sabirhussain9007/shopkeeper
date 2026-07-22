@@ -6,8 +6,11 @@ const handlers = crudHandlers({
   model: Product,
   schema: productSchema,
   permission: "inventory:write",
-  searchFields: ["productName","sku","barcode","brand"],
+  searchFields: ["productName", "sku", "barcode", "brand"],
   activityEntity: "product",
+  uniqueFields: [{ field: "sku" }],
+  includeDeleted: true,
+  listSort: { productName: 1, createdAt: 1 },
 });
 
 export const GET = handlers.GET;

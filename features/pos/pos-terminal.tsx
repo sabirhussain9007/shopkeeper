@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { BarcodeScannerDialog } from "@/features/pos/barcode-scanner-dialog";
-import { buildSalePayload, productToCartItem, validatePaymentReference } from "@/features/pos/pos-utils";
+import { buildSalePayload, productToCartItem, validatePaymentReference, validateWalletLastFourDigits } from "@/features/pos/pos-utils";
 import { usePosCustomers, usePosProducts, usePosSettings } from "@/features/pos/use-pos-data";
 import { PaymentAccountSelect, PaymentMethodAccountSelect } from "@/components/payment/payment-method-account-select";
 import { useShopPaymentAccounts } from "@/hooks/use-shop-payment-accounts";
@@ -140,12 +140,42 @@ export function PosTerminal() {
       ? Math.round((computed.subtotal - computed.discount) * (Number(selectedCustomer.groupDiscountPercent) / 100))
       : 0;
   const grandTotal = Math.max(computed.grandTotal - groupDiscountAmount - pointsRedeemed, 0);
-  const settings = settingsQuery.data ?? { businessName: "Shopkeeper", logo: "", address: "", phone: "", receiptSize: "80mm" as const, receiptLogoAlign: "center" as const, receiptHeader: "", receiptFooter: "", thankYouMessage: "Thank you for shopping with us." };
+  const settings = settingsQuery.data ?? {
+    businessName: "Shopkeeper",
+    logo: "",
+    address: "",
+    phone: "",
+    email: "",
+    gstVatNumber: "",
+    ntn: "",
+    taxLabel: "Tax",
+    showTaxOnReceipt: true,
+    receiptTitle: "Sales Receipt",
+    receiptSize: "80mm" as const,
+    receiptLogoAlign: "center" as const,
+    receiptHeader: "",
+    receiptFooter: "",
+    thankYouMessage: "Thank you for shopping with us.",
+    showReceiptLogo: true,
+    showReceiptBarcode: true,
+    showCashierOnReceipt: true,
+    showCustomerOnReceipt: true,
+    showSkuOnReceipt: false,
+    showTaxNumbersOnReceipt: true,
+    showEmailOnReceipt: false,
+    autoPrintReceipt: false,
+  };
 
   const printReceipt = useReactToPrint({
     contentRef: receiptRef,
     documentTitle: receiptSnapshot?.invoiceNumber ?? "receipt",
   });
+
+  useEffect(() => {
+    if (!receiptSnapshot || !settings.autoPrintReceipt) return;
+    const timer = window.setTimeout(() => printReceipt(), 250);
+    return () => window.clearTimeout(timer);
+  }, [receiptSnapshot, settings.autoPrintReceipt, printReceipt]);
 
   const applyCoupon = useCallback(async () => {
     const code = couponInput.trim();
@@ -219,14 +249,11 @@ export function PosTerminal() {
       const resolved = resolvePaymentSelection(value, paymentAccounts);
       pos.setPaymentMethod(resolved.paymentMethod as PaymentMethod);
       setSelectedAccountName(resolved.bankName);
+      setPaymentReference("");
+      setPaymentReferenceError(null);
 
-      if (!(requiresFullPayment(resolved.paymentMethod as PaymentMethod) && resolved.paymentMethod !== "cash" && resolved.paymentMethod !== "cheque")) {
-        setPaymentReference("");
-        setPaymentReferenceError(null);
-      }
-      if (resolved.paymentMethod === "cheque") {
-        setPaymentReference("");
-        setPaymentReferenceError(null);
+      const method = resolved.paymentMethod as PaymentMethod;
+      if (method === "cheque") {
         setCashCustomerName("");
         pos.setPaidAmount(pos.computed().grandTotal);
         return;
@@ -295,13 +322,16 @@ export function PosTerminal() {
         ? Math.max(grandTotal - cashTendered, 0)
         : 0;
   const creditDue = pos.paymentMethod === "credit" ? grandTotal : pos.paymentMethod === "split" ? amountDue : 0;
-  const needsPaymentReference =
-    requiresFullPayment(pos.paymentMethod) && pos.paymentMethod !== "cash" && pos.paymentMethod !== "cheque";
+  const needsPaymentReference = pos.paymentMethod === "bank";
+  const needsWalletLastFourDigits = pos.paymentMethod === "easypaisa" || pos.paymentMethod === "jazzcash";
   const needsChequeDetails = pos.paymentMethod === "cheque";
   const cartLineTotal = (item: (typeof pos.items)[number]) => item.quantity * item.unitPrice;
 
   const walkInSale =
-    pos.paymentMethod === "cash" || (requiresFullPayment(pos.paymentMethod) && pos.paymentMethod !== "cheque");
+    pos.paymentMethod === "cash" ||
+    pos.paymentMethod === "easypaisa" ||
+    pos.paymentMethod === "jazzcash" ||
+    (requiresFullPayment(pos.paymentMethod) && pos.paymentMethod !== "cheque");
 
   const creditExceeded =
     selectedCustomer && creditDue > 0 && (selectedCustomer.currentBalance ?? 0) + creditDue > selectedCustomer.creditLimit;
@@ -377,6 +407,14 @@ export function PosTerminal() {
       toast.error("Select a registered payment account.");
       return;
     }
+    if (needsWalletLastFourDigits) {
+      const refError = validateWalletLastFourDigits(paymentReference);
+      if (refError) {
+        setPaymentReferenceError(refError);
+        toast.error(refError);
+        return;
+      }
+    }
     if (needsPaymentReference) {
       const refError = validatePaymentReference(paymentReference);
       if (refError) {
@@ -406,7 +444,7 @@ export function PosTerminal() {
         paymentMethod: pos.paymentMethod,
         paidAmount: requiresFullPayment(pos.paymentMethod) ? grandTotal : pos.paidAmount,
         orderNotes,
-        paymentReference: needsPaymentReference ? paymentReference.trim() : undefined,
+        paymentReference: needsPaymentReference || needsWalletLastFourDigits ? paymentReference.trim() : undefined,
         chequeNumber: pos.paymentMethod === "cheque" ? chequeNumber.trim() : undefined,
         bankName:
           pos.paymentMethod === "cheque"
@@ -457,7 +495,7 @@ export function PosTerminal() {
     } finally {
       setCheckoutPending(false);
     }
-  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery, cashReceiptCustomerName, voidOrder, walkInSale, orderNotes, paymentReference, needsPaymentReference, changeDue, grandTotal, groupDiscountAmount, pointsRedeemed, chequeNumber, chequeBankName, chequeDate, resolvedPayment, selectedAccountName]);
+  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery, cashReceiptCustomerName, voidOrder, walkInSale, orderNotes, paymentReference, needsPaymentReference, needsWalletLastFourDigits, changeDue, grandTotal, groupDiscountAmount, pointsRedeemed, chequeNumber, chequeBankName, chequeDate, resolvedPayment, selectedAccountName]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -810,6 +848,40 @@ export function PosTerminal() {
             </div>
           ) : null}
 
+          {needsWalletLastFourDigits ? (
+            <div className="mt-4">
+              <Label htmlFor="pos-wallet-last-four" className="text-zinc-700">
+                Last 4 digits <span className="text-red-600">*</span>
+              </Label>
+              <Input
+                id="pos-wallet-last-four"
+                className="mt-1.5 font-mono tracking-widest"
+                placeholder="e.g. 4829"
+                inputMode="numeric"
+                autoComplete="off"
+                value={paymentReference}
+                required
+                maxLength={4}
+                aria-invalid={paymentReferenceError ? true : undefined}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, "").slice(0, 4);
+                  setPaymentReference(next);
+                  if (paymentReferenceError) {
+                    setPaymentReferenceError(validateWalletLastFourDigits(next));
+                  }
+                }}
+                onBlur={() => setPaymentReferenceError(validateWalletLastFourDigits(paymentReference))}
+              />
+              {paymentReferenceError ? (
+                <p className="mt-1.5 text-xs text-red-600">{paymentReferenceError}</p>
+              ) : (
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Required for {pos.paymentMethod === "easypaisa" ? "EasyPaisa" : "JazzCash"} — enter the last 4 digits of the transaction ID.
+                </p>
+              )}
+            </div>
+          ) : null}
+
           {needsPaymentReference ? (
             <div className="mt-4">
               <Label htmlFor="pos-payment-reference" className="text-zinc-700">
@@ -1042,14 +1114,19 @@ export function PosTerminal() {
             logoAlign={settings.receiptLogoAlign}
             address={settings.address}
             phone={settings.phone}
+            email={settings.email}
+            gstVatNumber={settings.gstVatNumber}
+            ntn={settings.ntn}
+            receiptTitle={settings.receiptTitle}
             receiptHeader={settings.receiptHeader}
             receiptFooter={settings.receiptFooter}
             thankYouMessage={settings.thankYouMessage}
-            cashierName={session?.user?.name ?? undefined}
-            customerName={receiptSnapshot.customerName}
+            cashierName={settings.showCashierOnReceipt ? session?.user?.name ?? undefined : undefined}
+            customerName={settings.showCustomerOnReceipt ? receiptSnapshot.customerName : undefined}
             subtotal={receiptSnapshot.subtotal}
             discount={receiptSnapshot.discount}
             tax={receiptSnapshot.tax}
+            taxLabel={settings.taxLabel}
             grandTotal={receiptSnapshot.grandTotal}
             paidAmount={receiptSnapshot.paidAmount}
             changeDue={receiptSnapshot.changeDue}
@@ -1059,6 +1136,14 @@ export function PosTerminal() {
             chequeNumber={receiptSnapshot.chequeNumber}
             bankName={receiptSnapshot.bankName}
             chequeDate={receiptSnapshot.chequeDate}
+            showReceiptLogo={settings.showReceiptLogo}
+            showReceiptBarcode={settings.showReceiptBarcode}
+            showCashier={settings.showCashierOnReceipt}
+            showCustomer={settings.showCustomerOnReceipt}
+            showSku={settings.showSkuOnReceipt}
+            showTaxNumbers={settings.showTaxNumbersOnReceipt}
+            showEmail={settings.showEmailOnReceipt}
+            showTax={settings.showTaxOnReceipt}
           />
         </div>
       ) : null}

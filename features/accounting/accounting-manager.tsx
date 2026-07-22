@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { Plus, Wallet, Landmark, TrendingUp, TrendingDown } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,7 @@ import { PaginationBar } from "@/components/crud/data-toolbar";
 import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Surface } from "@/components/ui/card";
+import { Card, Surface } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,18 @@ const bookLabels: Record<AccountingEntryInput["book"], string> = {
   expense: "Expense",
 };
 
+const summaryCards: Array<{
+  key: AccountingEntryInput["book"];
+  label: string;
+  hint: string;
+  icon: typeof Wallet;
+}> = [
+  { key: "cash", label: "Cash", hint: "Cash on hand", icon: Wallet },
+  { key: "bank", label: "Bank", hint: "Bank balance", icon: Landmark },
+  { key: "income", label: "Income", hint: "Total revenue", icon: TrendingUp },
+  { key: "expense", label: "Expense", hint: "Total expenses", icon: TrendingDown },
+];
+
 export function AccountingManager() {
   const queryClient = useQueryClient();
   const [params, setParams] = useState<{ page: number; limit: number; book?: string }>({ page: 1, limit: 20 });
@@ -72,6 +84,7 @@ export function AccountingManager() {
         total: number;
         page: number;
         pages: number;
+        summary: Record<AccountingEntryInput["book"], number>;
       }>;
     },
   });
@@ -113,6 +126,7 @@ export function AccountingManager() {
   });
 
   const items = list.data?.items ?? [];
+  const summary = list.data?.summary ?? { cash: 0, bank: 0, income: 0, expense: 0 };
 
   return (
     <div className="space-y-6">
@@ -125,6 +139,23 @@ export function AccountingManager() {
           <Plus className="h-4 w-4" />
           New Entry
         </Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map(({ key, label, hint, icon: Icon }) => (
+          <Card
+            key={key}
+            className={params.book === key ? "cursor-pointer ring-2 ring-emerald-500" : "cursor-pointer"}
+            onClick={() => onBookFilter(params.book === key ? "" : key)}
+          >
+            <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <Icon className="h-4 w-4" />
+              {label}
+            </div>
+            <p className="mt-2 text-2xl font-semibold">{currency(summary[key])}</p>
+            <p className="mt-1 text-xs text-zinc-500">{hint}</p>
+          </Card>
+        ))}
       </div>
 
       <Surface className="space-y-4">

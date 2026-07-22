@@ -7,6 +7,9 @@ const handlers = crudItemHandlers({
   schema: categorySchema,
   permission: "inventory:write",
   searchFields: ["name"],
+  activityEntity: "category",
+  uniqueFields: [{ field: "name", caseInsensitive: true }],
+  includeDeleted: true,
 });
 
 export const GET = handlers.GET;

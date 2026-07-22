@@ -15,6 +15,10 @@ type ReceiptProps = {
   logoAlign?: ReceiptAlign;
   address?: string;
   phone?: string;
+  email?: string;
+  gstVatNumber?: string;
+  ntn?: string;
+  receiptTitle?: string;
   receiptHeader?: string;
   receiptFooter?: string;
   thankYouMessage: string;
@@ -23,6 +27,7 @@ type ReceiptProps = {
   subtotal: number;
   discount: number;
   tax: number;
+  taxLabel?: string;
   grandTotal: number;
   paidAmount: number;
   changeDue: number;
@@ -32,6 +37,14 @@ type ReceiptProps = {
   chequeNumber?: string;
   bankName?: string;
   chequeDate?: string;
+  showReceiptLogo?: boolean;
+  showReceiptBarcode?: boolean;
+  showCashier?: boolean;
+  showCustomer?: boolean;
+  showSku?: boolean;
+  showTaxNumbers?: boolean;
+  showEmail?: boolean;
+  showTax?: boolean;
 };
 
 export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
@@ -44,6 +57,10 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
     logoAlign = "center",
     address,
     phone,
+    email,
+    gstVatNumber,
+    ntn,
+    receiptTitle,
     receiptHeader,
     receiptFooter,
     thankYouMessage,
@@ -52,6 +69,7 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
     subtotal,
     discount,
     tax,
+    taxLabel = "Tax",
     grandTotal,
     paidAmount,
     changeDue,
@@ -61,6 +79,14 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
     chequeNumber,
     bankName,
     chequeDate,
+    showReceiptLogo = true,
+    showReceiptBarcode = true,
+    showCashier = true,
+    showCustomer = true,
+    showSku = false,
+    showTaxNumbers = true,
+    showEmail = false,
+    showTax = true,
   },
   ref,
 ) {
@@ -68,6 +94,7 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
   const brandJustify = logoAlign === "left" ? "flex-start" : logoAlign === "right" ? "flex-end" : "center";
   const brandDirection = logoAlign === "right" ? "row-reverse" : "row";
   const textAlign = "center";
+  const displayLogo = showReceiptLogo && logo;
 
   return (
     <div ref={ref} className={`receipt receipt-${size}`}>
@@ -111,20 +138,24 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
       `}</style>
       <div className="receipt-brand" style={{ justifyContent: brandJustify, flexDirection: brandDirection }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- Receipts must support printable data URLs and external logo URLs. */}
-        {logo ? <img className="receipt-logo" src={logo} alt={`${businessName} logo`} /> : null}
+        {displayLogo ? <img className="receipt-logo" src={logo} alt={`${businessName} logo`} /> : null}
         <div className="receipt-brand-text">
           <h1 style={{ textAlign, fontSize: 16, margin: 0 }}>{businessName}</h1>
           {address ? <div className="receipt-meta" style={{ textAlign }}>{address}</div> : null}
           {phone ? <div className="receipt-meta" style={{ textAlign }}>Phone: {phone}</div> : null}
+          {showEmail && email ? <div className="receipt-meta" style={{ textAlign }}>Email: {email}</div> : null}
+          {showTaxNumbers && gstVatNumber ? <div className="receipt-meta" style={{ textAlign }}>GST/VAT: {gstVatNumber}</div> : null}
+          {showTaxNumbers && ntn ? <div className="receipt-meta" style={{ textAlign }}>NTN: {ntn}</div> : null}
         </div>
       </div>
+      {receiptTitle ? <div className="receipt-text" style={{ textAlign, fontWeight: 700, marginTop: 4 }}>{receiptTitle}</div> : null}
       {receiptHeader ? <div className="receipt-text" style={{ textAlign }}>{receiptHeader}</div> : null}
       <div className="receipt-invoice-meta">
         <div>Invoice No: {invoiceNumber}</div>
         {receiptDate ? <div>Date/Time: {receiptDate}</div> : null}
       </div>
-      {cashierName ? <div style={{ textAlign, fontSize: 11 }}>Cashier: {cashierName}</div> : null}
-      {customerName ? <div style={{ textAlign, fontSize: 11 }}>Customer: {customerName}</div> : null}
+      {showCashier && cashierName ? <div style={{ textAlign, fontSize: 11 }}>Cashier: {cashierName}</div> : null}
+      {showCustomer && customerName ? <div style={{ textAlign, fontSize: 11 }}>Customer: {customerName}</div> : null}
       <div className="dash" />
       <div className="item item-header">
         <div>Item Name</div>
@@ -134,7 +165,10 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
       </div>
       {items.map((item) => (
         <div key={item.productId} className="item">
-          <div className="item-name">{item.name}</div>
+          <div className="item-name">
+            {item.name}
+            {showSku && item.sku ? <span style={{ fontWeight: 400 }}> ({item.sku})</span> : null}
+          </div>
           <div className="item-qty">{item.quantity}</div>
           <div className="item-price">{currency(item.unitPrice)}</div>
           <div className="item-total">{currency(item.quantity * item.unitPrice - item.discount)}</div>
@@ -151,9 +185,9 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
           <span>-{currency(discount)}</span>
         </div>
       ) : null}
-      {tax > 0 ? (
+      {showTax && tax > 0 ? (
         <div className="row">
-          <span>Tax</span>
+          <span>{taxLabel}</span>
           <span>{currency(tax)}</span>
         </div>
       ) : null}
@@ -205,7 +239,7 @@ export const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt
           <span>{currency(outstandingBalance)}</span>
         </div>
       ) : null}
-      <div className="barcode" />
+      {showReceiptBarcode ? <div className="barcode" /> : null}
       {receiptFooter ? <p className="receipt-text" style={{ textAlign, margin: "8px 0 0" }}>{receiptFooter}</p> : null}
       <p style={{ textAlign: "center", fontSize: 11, margin: "8px 0 0" }}>{thankYouMessage}</p>
     </div>

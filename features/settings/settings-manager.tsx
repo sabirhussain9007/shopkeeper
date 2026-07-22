@@ -48,6 +48,36 @@ type UserFormValues = z.infer<typeof userFormSchema>;
 
 const emptyUser: UserFormValues = { name: "", email: "", password: "", role: "cashier", status: "active" };
 
+function SettingToggle({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+      <input
+        id={id}
+        type="checkbox"
+        className="mt-0.5 h-4 w-4 accent-emerald-600"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        <span className="block text-sm font-medium">{label}</span>
+        {description ? <span className="mt-0.5 block text-xs text-zinc-500">{description}</span> : null}
+      </span>
+    </label>
+  );
+}
+
 export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopRole }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -337,43 +367,135 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             ) : tab === "Receipt & Tax" ? (
               <>
                 <h2 className="text-lg font-semibold">Receipt & tax</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label htmlFor="currency">Currency</Label>
-                    <Input id="currency" maxLength={3} {...form.register("currency")} />
-                  </div>
-                  <div>
-                    <Label htmlFor="taxRate">Default tax rate (%)</Label>
-                    <Input id="taxRate" type="number" step="0.01" {...form.register("taxRate")} />
-                  </div>
-                  <div>
-                    <Label htmlFor="receiptSize">Receipt size</Label>
-                    <Select id="receiptSize" {...form.register("receiptSize")}>
-                      <option value="58mm">58mm thermal</option>
-                      <option value="80mm">80mm thermal</option>
-                      <option value="a4">A4</option>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="receiptLogoAlign">Receipt logo alignment</Label>
-                    <Select id="receiptLogoAlign" {...form.register("receiptLogoAlign")}>
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </Select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="receiptHeader">Receipt header</Label>
-                    <Textarea id="receiptHeader" {...form.register("receiptHeader")} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="receiptFooter">Receipt footer</Label>
-                    <Textarea id="receiptFooter" {...form.register("receiptFooter")} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="thankYouMessage">Thank you message</Label>
-                    <Input id="thankYouMessage" autoComplete="off" {...form.register("thankYouMessage")} />
-                  </div>
+                <p className="text-sm text-zinc-500">Configure tax defaults and what appears on POS receipts.</p>
+
+                <div className="space-y-6">
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Tax</h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <Label htmlFor="currency">Currency</Label>
+                        <Input id="currency" maxLength={3} {...form.register("currency")} />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxRate">Default tax rate (%)</Label>
+                        <Input id="taxRate" type="number" step="0.01" {...form.register("taxRate")} />
+                      </div>
+                      <div>
+                        <Label htmlFor="taxLabel">Tax label on receipt</Label>
+                        <Input id="taxLabel" placeholder="Tax, GST, VAT..." {...form.register("taxLabel")} />
+                      </div>
+                      <div>
+                        <Label htmlFor="receiptTitle">Receipt title</Label>
+                        <Input id="receiptTitle" placeholder="Sales Receipt" {...form.register("receiptTitle")} />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <SettingToggle
+                        id="taxInclusive"
+                        label="Tax-inclusive pricing"
+                        description="Product prices already include tax."
+                        checked={Boolean(preview.taxInclusive)}
+                        onChange={(checked) => form.setValue("taxInclusive", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showTaxOnReceipt"
+                        label="Show tax line on receipt"
+                        checked={preview.showTaxOnReceipt !== false}
+                        onChange={(checked) => form.setValue("showTaxOnReceipt", checked, { shouldDirty: true })}
+                      />
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Layout</h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <Label htmlFor="receiptSize">Receipt size</Label>
+                        <Select id="receiptSize" {...form.register("receiptSize")}>
+                          <option value="58mm">58mm thermal</option>
+                          <option value="80mm">80mm thermal</option>
+                          <option value="a4">A4</option>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="receiptLogoAlign">Receipt logo alignment</Label>
+                        <Select id="receiptLogoAlign" {...form.register("receiptLogoAlign")}>
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </Select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="receiptHeader">Receipt header</Label>
+                        <Textarea id="receiptHeader" rows={2} placeholder="Optional message above invoice details" {...form.register("receiptHeader")} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="receiptFooter">Receipt footer</Label>
+                        <Textarea id="receiptFooter" rows={2} placeholder="Optional message above thank-you line" {...form.register("receiptFooter")} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label htmlFor="thankYouMessage">Thank you message</Label>
+                        <Input id="thankYouMessage" autoComplete="off" {...form.register("thankYouMessage")} />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Show on receipt</h3>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <SettingToggle
+                        id="showReceiptLogo"
+                        label="Business logo"
+                        checked={preview.showReceiptLogo !== false}
+                        onChange={(checked) => form.setValue("showReceiptLogo", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showReceiptBarcode"
+                        label="Barcode strip"
+                        checked={preview.showReceiptBarcode !== false}
+                        onChange={(checked) => form.setValue("showReceiptBarcode", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showCashierOnReceipt"
+                        label="Cashier name"
+                        checked={preview.showCashierOnReceipt !== false}
+                        onChange={(checked) => form.setValue("showCashierOnReceipt", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showCustomerOnReceipt"
+                        label="Customer name"
+                        checked={preview.showCustomerOnReceipt !== false}
+                        onChange={(checked) => form.setValue("showCustomerOnReceipt", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showSkuOnReceipt"
+                        label="Product SKU"
+                        checked={Boolean(preview.showSkuOnReceipt)}
+                        onChange={(checked) => form.setValue("showSkuOnReceipt", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showTaxNumbersOnReceipt"
+                        label="GST/VAT & NTN"
+                        description="Uses values from the Business tab."
+                        checked={preview.showTaxNumbersOnReceipt !== false}
+                        onChange={(checked) => form.setValue("showTaxNumbersOnReceipt", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="showEmailOnReceipt"
+                        label="Business email"
+                        checked={Boolean(preview.showEmailOnReceipt)}
+                        onChange={(checked) => form.setValue("showEmailOnReceipt", checked, { shouldDirty: true })}
+                      />
+                      <SettingToggle
+                        id="autoPrintReceipt"
+                        label="Auto-print after checkout"
+                        description="Opens the print dialog automatically on POS sale."
+                        checked={Boolean(preview.autoPrintReceipt)}
+                        onChange={(checked) => form.setValue("autoPrintReceipt", checked, { shouldDirty: true })}
+                      />
+                    </div>
+                  </section>
                 </div>
               </>
             ) : (
@@ -424,17 +546,34 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
                 logoAlign={preview.receiptLogoAlign ?? "center"}
                 address={preview.address || "Shop address"}
                 phone={preview.phone || "Phone number"}
+                email={preview.email || "shop@example.com"}
+                gstVatNumber={preview.gstVatNumber || "123456789"}
+                ntn={preview.ntn || "NTN-000000"}
+                receiptTitle={preview.receiptTitle || "Sales Receipt"}
                 receiptHeader={preview.receiptHeader || undefined}
                 receiptFooter={preview.receiptFooter || undefined}
                 thankYouMessage={preview.thankYouMessage || "Thank you for shopping with us."}
+                cashierName="Sample Cashier"
+                customerName="Walk-in Customer"
                 subtotal={1000}
                 discount={0}
-                tax={((Number(preview.taxRate) || 0) / 100) * 1000}
-                grandTotal={1000 + ((Number(preview.taxRate) || 0) / 100) * 1000}
+                tax={preview.showTaxOnReceipt === false ? 0 : ((Number(preview.taxRate) || 0) / 100) * 1000}
+                taxLabel={preview.taxLabel || "Tax"}
+                grandTotal={
+                  1000 + (preview.showTaxOnReceipt === false ? 0 : ((Number(preview.taxRate) || 0) / 100) * 1000)
+                }
                 paidAmount={1000}
                 changeDue={0}
                 paymentMethod="cash"
                 issuedAt="13 Jun 2026, 06:30 PM"
+                showReceiptLogo={preview.showReceiptLogo !== false}
+                showReceiptBarcode={preview.showReceiptBarcode !== false}
+                showCashier={preview.showCashierOnReceipt !== false}
+                showCustomer={preview.showCustomerOnReceipt !== false}
+                showSku={Boolean(preview.showSkuOnReceipt)}
+                showTaxNumbers={preview.showTaxNumbersOnReceipt !== false}
+                showEmail={Boolean(preview.showEmailOnReceipt)}
+                showTax={preview.showTaxOnReceipt !== false}
               />
             </div>
               </>

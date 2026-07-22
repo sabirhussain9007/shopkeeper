@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, PackageCheck, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, PackageCheck, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { PaginationBar } from "@/components/crud/data-toolbar";
 import { BlockLoader, TableLoader } from "@/components/ui/loader";
-import { currency, formatPakistanDate, pakistanTodayKey, parsePakistanDateInput } from "@/lib/utils";
+import { currency, formatPakistanDate, formatPakistanDateInput, pakistanTodayKey, parsePakistanDateInput } from "@/lib/utils";
 import { PaymentAccountSelect } from "@/components/payment/payment-method-account-select";
 import { aggregatePurchaseLines, calcPurchaseLineAmounts, type PurchaseDiscountType } from "@/lib/purchase-line-math";
+import { validateWalletLastFourDigits } from "@/features/pos/pos-utils";
 import type { BankAccountInput, ProductInput, SupplierInput } from "@/types";
 
 type Supplier = SupplierInput & { _id: string; supplierName: string; phone?: string };
@@ -29,6 +30,9 @@ type Purchase = {
   grandTotal: number;
   paidAmount: number;
   paymentMethod?: string;
+  chequeNumber?: string;
+  bankName?: string;
+  chequeDate?: string;
   status: string;
   createdAt?: string;
 };
@@ -111,7 +115,7 @@ function formatPurchaseDiscount(type: PurchaseDiscountType, value: number) {
   return currency(value);
 }
 
-type PurchasePaymentMethod = "cash" | "cheque" | "credit";
+type PurchasePaymentMethod = "cash" | "cheque" | "credit" | "easypaisa" | "jazzcash";
 type RegisteredBankAccount = BankAccountInput & { _id: string };
 
 export function PurchasesManager({ variant = "order" }: { variant?: "order" | "spot" }) {
@@ -133,6 +137,8 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeBankAccountId, setChequeBankAccountId] = useState("");
   const [chequeDate, setChequeDate] = useState("");
+  const [walletAccountId, setWalletAccountId] = useState("");
+  const [walletLastFour, setWalletLastFour] = useState("");
   const [paidAmount, setPaidAmount] = useState(0);
   const [lines, setLines] = useState<LineItem[]>([]);
   const [selectedProductData, setSelectedProductData] = useState<Product | null>(null);
@@ -159,6 +165,11 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
   const [receiveSavedBankName, setReceiveSavedBankName] = useState("");
   const [returnConfirmOpen, setReturnConfirmOpen] = useState(false);
   const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteSpotTarget, setDeleteSpotTarget] = useState<Purchase | null>(null);
+  const [deleteSpotSubmitting, setDeleteSpotSubmitting] = useState(false);
+  const [pendingEditBankName, setPendingEditBankName] = useState("");
+  const [pendingEditWalletBankName, setPendingEditWalletBankName] = useState("");
 
   const purchases = useQuery({
     queryKey: [isSpot ? "spot-purchases" : "purchases", page],
@@ -214,7 +225,22 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
     },
   });
 
+  const paymentAccounts = useQuery({
+    queryKey: ["bank-accounts", "spot-wallet"],
+    enabled: createOpen && isSpot,
+    queryFn: async () => {
+      const response = await fetch("/api/bank-accounts?status=active&limit=100");
+      if (!response.ok) throw new Error("Unable to load payment accounts");
+      return response.json() as Promise<{ items: RegisteredBankAccount[] }>;
+    },
+  });
+
   const activeBankAccounts = bankAccounts.data?.items ?? [];
+  const activePaymentAccounts = paymentAccounts.data?.items ?? [];
+  const isWalletPayment = paymentMethod === "easypaisa" || paymentMethod === "jazzcash";
+  const walletAccounts = activePaymentAccounts.filter((account) => account.accountType === paymentMethod);
+  const selectedWalletAccount = walletAccounts.find((account) => account._id === walletAccountId);
+  const walletBankName = selectedWalletAccount?.name ?? "";
   const selectedChequeBank = activeBankAccounts.find((account) => account._id === chequeBankAccountId);
   const chequeBankName = selectedChequeBank?.name ?? "";
   const selectedReceiveChequeBank = activeBankAccounts.find((account) => account._id === receiveChequeBankAccountId);
@@ -278,10 +304,42 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
 
   useEffect(() => {
     if (!createOpen || paymentMethod !== "cheque" || activeBankAccounts.length === 0) return;
+    if (pendingEditBankName) return;
     if (!chequeBankAccountId || !activeBankAccounts.some((account) => account._id === chequeBankAccountId)) {
-      setChequeBankAccountId(activeBankAccounts[0]._id);
+      if (!editingId) setChequeBankAccountId(activeBankAccounts[0]._id);
     }
-  }, [activeBankAccounts, chequeBankAccountId, createOpen, paymentMethod]);
+  }, [activeBankAccounts, chequeBankAccountId, createOpen, paymentMethod, pendingEditBankName, editingId]);
+
+  useEffect(() => {
+    if (!pendingEditBankName || activeBankAccounts.length === 0) return;
+    const bank = activeBankAccounts.find((account) => account.name === pendingEditBankName);
+    if (bank) {
+      setChequeBankAccountId(bank._id);
+      setPendingEditBankName("");
+    }
+  }, [activeBankAccounts, pendingEditBankName]);
+
+  useEffect(() => {
+    if (!pendingEditWalletBankName || walletAccounts.length === 0) return;
+    const account = walletAccounts.find((item) => item.name === pendingEditWalletBankName);
+    if (account) {
+      setWalletAccountId(account._id);
+      setPendingEditWalletBankName("");
+    }
+  }, [pendingEditWalletBankName, walletAccounts]);
+
+  useEffect(() => {
+    if (!createOpen || !isWalletPayment || walletAccounts.length === 0) return;
+    if (pendingEditWalletBankName) return;
+    if (!walletAccountId || !walletAccounts.some((account) => account._id === walletAccountId)) {
+      if (!editingId) setWalletAccountId(walletAccounts[0]._id);
+    }
+  }, [createOpen, editingId, isWalletPayment, pendingEditWalletBankName, walletAccountId, walletAccounts]);
+
+  useEffect(() => {
+    if (!createOpen || !isWalletPayment || grandTotal <= 0) return;
+    setPaidAmount((current) => (current <= 0 ? grandTotal : current));
+  }, [createOpen, grandTotal, isWalletPayment]);
 
   useEffect(() => {
     if (!createOpen || paymentMethod !== "cheque" || grandTotal <= 0) return;
@@ -323,6 +381,8 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
     setChequeNumber("");
     setChequeBankAccountId("");
     setChequeDate("");
+    setWalletAccountId("");
+    setWalletLastFour("");
     setPaidAmount(0);
     setLines([]);
     setSelectedProductData(null);
@@ -335,6 +395,9 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
     setLineDiscountValue(0);
     setLineSalesTaxType("percentage");
     setLineSalesTaxValue(0);
+    setEditingId(null);
+    setPendingEditBankName("");
+    setPendingEditWalletBankName("");
   };
 
   const openCreate = () => {
@@ -400,6 +463,129 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
     clearLineDraft();
   };
 
+  const buildPurchasePayload = () => ({
+    supplier: supplierId,
+    orderDate: orderDate ? new Date(orderDate).toISOString() : undefined,
+    invoiceNumber: invoiceNumber.trim(),
+    products: lines.map((l) => ({
+      product: l.productId,
+      name: l.name,
+      quantity: l.quantity,
+      cost: l.cost,
+      taxRate: l.taxRate,
+      discountType: l.discountType,
+      discountValue: l.discountValue,
+      salesTaxType: l.salesTaxType,
+      salesTaxValue: l.salesTaxValue,
+      grossAmount: l.grossAmount,
+      netAmount: l.netAmount,
+      lineTotal: l.netAmount,
+    })),
+    subtotal,
+    taxes: salesTaxAmount,
+    grandTotal,
+    paidAmount,
+    paymentMethod,
+    chequeNumber:
+      paymentMethod === "cheque"
+        ? chequeNumber.trim()
+        : isWalletPayment
+          ? walletLastFour.trim()
+          : "",
+    bankName: paymentMethod === "cheque" ? chequeBankName.trim() : isWalletPayment ? walletBankName.trim() : "",
+    chequeDate: paymentMethod === "cheque" && chequeDate ? parsePakistanDateInput(chequeDate).toISOString() : null,
+    status: isSpot ? "received" : "ordered",
+    purchaseKind: isSpot ? "spot" : "order",
+  });
+
+  const openEditSpotPurchase = async (id: string) => {
+    try {
+      const response = await fetch(`/api/purchases/${id}/detail`);
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error(data.error ?? "Unable to load spot purchase.");
+        return;
+      }
+
+      const purchase = data.purchase ?? {};
+      const items = (data.items ?? []) as PurchaseDetailItem[];
+      const supplier = purchase.supplier ?? {};
+      const supplierIdValue = typeof supplier === "string" ? supplier : String(supplier._id ?? purchase.supplier ?? "");
+      const supplierName =
+        typeof supplier === "object" && supplier && "supplierName" in supplier ? String(supplier.supplierName) : "";
+      const supplierPhone =
+        typeof supplier === "object" && supplier && "phone" in supplier ? String(supplier.phone ?? "") : "";
+
+      resetCreateForm();
+      setEditingId(id);
+      setSupplierId(supplierIdValue);
+      setVendorSearch(supplierPhone ? `${supplierName} (${supplierPhone})` : supplierName);
+      setOrderDate(
+        purchase.orderDate
+          ? formatPakistanDateInput(purchase.orderDate)
+          : purchase.createdAt
+            ? formatPakistanDateInput(purchase.createdAt)
+            : todayInput(),
+      );
+      setInvoiceNumber(purchase.invoiceNumber ?? "");
+      setPaymentMethod(
+        purchase.paymentMethod === "cheque"
+          ? "cheque"
+          : purchase.paymentMethod === "credit"
+            ? "credit"
+            : purchase.paymentMethod === "easypaisa"
+              ? "easypaisa"
+              : purchase.paymentMethod === "jazzcash"
+                ? "jazzcash"
+                : "cash",
+      );
+      setChequeNumber(purchase.paymentMethod === "cheque" ? (purchase.chequeNumber ?? "") : "");
+      setWalletLastFour(
+        purchase.paymentMethod === "easypaisa" || purchase.paymentMethod === "jazzcash" ? (purchase.chequeNumber ?? "") : "",
+      );
+      setChequeDate(purchase.chequeDate ? formatPakistanDateInput(purchase.chequeDate) : "");
+      setPaidAmount(purchase.paidAmount ?? 0);
+      setLines(
+        items.map((item) => {
+          const discountType = item.discountType ?? item.orderedDiscountType ?? "flat";
+          const discountValue = item.discountValue ?? item.orderedDiscountValue ?? 0;
+          const salesTaxType = item.salesTaxType ?? item.orderedSalesTaxType ?? "percentage";
+          const salesTaxValue = item.salesTaxValue ?? item.orderedSalesTaxValue ?? item.taxRate ?? 0;
+          const amounts = calcPurchaseLineAmounts({
+            quantity: item.quantity,
+            cost: item.cost,
+            discountType,
+            discountValue,
+            salesTaxType,
+            salesTaxValue,
+          });
+          return {
+            productId: productIdFromDetail(item.product),
+            name: item.name,
+            quantity: item.quantity,
+            cost: item.cost,
+            taxRate: salesTaxType === "percentage" ? salesTaxValue : 0,
+            discountType,
+            discountValue,
+            salesTaxType,
+            salesTaxValue,
+            ...amounts,
+          };
+        }),
+      );
+      setCreateOpen(true);
+
+      if (purchase.paymentMethod === "cheque" && purchase.bankName) {
+        setPendingEditBankName(purchase.bankName);
+      }
+      if ((purchase.paymentMethod === "easypaisa" || purchase.paymentMethod === "jazzcash") && purchase.bankName) {
+        setPendingEditWalletBankName(purchase.bankName);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to load spot purchase.");
+    }
+  };
+
   const createPurchase = async () => {
     if (!supplierId || lines.length === 0) {
       toast.error("Select a vendor and add at least one product.");
@@ -418,40 +604,27 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
       toast.error("Select cheque date for cheque payment.");
       return;
     }
+    const requiresWalletDetails = isSpot && isWalletPayment;
+    if (requiresWalletDetails && !walletBankName.trim()) {
+      toast.error(`Select a registered ${paymentMethod === "easypaisa" ? "EasyPaisa" : "JazzCash"} account.`);
+      return;
+    }
+    if (requiresWalletDetails) {
+      const walletError = validateWalletLastFourDigits(walletLastFour);
+      if (walletError) {
+        toast.error(walletError);
+        return;
+      }
+    }
 
-    const response = await fetch(isSpot ? "/api/spot-purchases" : "/api/purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        supplier: supplierId,
-        orderDate: orderDate ? new Date(orderDate).toISOString() : undefined,
-        invoiceNumber: invoiceNumber.trim(),
-        products: lines.map((l) => ({
-          product: l.productId,
-          name: l.name,
-          quantity: l.quantity,
-          cost: l.cost,
-          taxRate: l.taxRate,
-          discountType: l.discountType,
-          discountValue: l.discountValue,
-          salesTaxType: l.salesTaxType,
-          salesTaxValue: l.salesTaxValue,
-          grossAmount: l.grossAmount,
-          netAmount: l.netAmount,
-          lineTotal: l.netAmount,
-        })),
-        subtotal,
-        taxes: salesTaxAmount,
-        grandTotal,
-        paidAmount,
-        paymentMethod,
-        chequeNumber: paymentMethod === "cheque" ? chequeNumber.trim() : "",
-        bankName: paymentMethod === "cheque" ? chequeBankName.trim() : "",
-        chequeDate: paymentMethod === "cheque" && chequeDate ? parsePakistanDateInput(chequeDate).toISOString() : null,
-        status: isSpot ? "received" : "ordered",
-        purchaseKind: isSpot ? "spot" : "order",
-      }),
-    });
+    const response = await fetch(
+      isSpot && editingId ? `/api/spot-purchases/${editingId}` : isSpot ? "/api/spot-purchases" : "/api/purchases",
+      {
+        method: isSpot && editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPurchasePayload()),
+      },
+    );
     const data = await response.json();
     if (!response.ok) {
       const fieldError = data.fieldErrors
@@ -459,10 +632,16 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
             .flat()
             .find(Boolean)
         : undefined;
-      toast.error(fieldError ?? data.error ?? "Unable to create purchase order.");
+      toast.error(fieldError ?? data.error ?? (editingId ? "Unable to update spot purchase." : "Unable to create purchase order."));
       return;
     }
-    toast.success(isSpot ? "Spot purchase recorded. Stock updated." : "Purchase order created.");
+    toast.success(
+      isSpot
+        ? editingId
+          ? "Spot purchase updated."
+          : "Spot purchase recorded. Stock updated."
+        : "Purchase order created.",
+    );
     setCreateOpen(false);
     resetCreateForm();
     queryClient.invalidateQueries({ queryKey: [isSpot ? "spot-purchases" : "purchases"] });
@@ -662,6 +841,27 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
         quantity: item.quantity,
       }));
 
+  const deleteSpotPurchase = async () => {
+    if (!deleteSpotTarget) return;
+    setDeleteSpotSubmitting(true);
+    try {
+      const response = await fetch(`/api/spot-purchases/${deleteSpotTarget._id}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) {
+        toast.error(data.error ?? "Unable to delete spot purchase.");
+        return;
+      }
+      toast.success("Spot purchase deleted.");
+      setDeleteSpotTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["spot-purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete spot purchase.");
+    } finally {
+      setDeleteSpotSubmitting(false);
+    }
+  };
+
   const returnAllGoods = async () => {
     if (!selectedId || !detail.data) return;
     const items = returnableItems(detail.data.items as PurchaseDetailItem[]);
@@ -686,6 +886,7 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
       setReturnConfirmOpen(false);
       setDetailOpen(false);
       queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["spot-purchases"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-detail", selectedId] });
     } finally {
       setReturnSubmitting(false);
@@ -769,6 +970,16 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
                             Receive
                           </Button>
                         ) : null}
+                        {isSpot ? (
+                          <>
+                            <Button size="sm" variant="ghost" title="Edit" onClick={() => void openEditSpotPurchase(po._id)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="danger" title="Delete" onClick={() => setDeleteSpotTarget(po)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -787,7 +998,7 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
 
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
         <DialogContent
-          title={isSpot ? "New Spot Purchase" : "New Purchase Order"}
+          title={editingId ? "Edit Spot Purchase" : isSpot ? "New Spot Purchase" : "New Purchase Order"}
           description={
             isSpot
               ? "Record an immediate vendor purchase. Stock is added to inventory as soon as you save."
@@ -1009,7 +1220,18 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
                       setChequeNumber("");
                       setChequeBankAccountId("");
                       setChequeDate("");
+                    }
+                    if (method !== "easypaisa" && method !== "jazzcash") {
+                      setWalletAccountId("");
+                      setWalletLastFour("");
                     } else {
+                      if (paidAmount <= 0 && grandTotal > 0) setPaidAmount(grandTotal);
+                      const accounts = activePaymentAccounts.filter((account) => account.accountType === method);
+                      if (accounts.length > 0 && !walletAccountId) {
+                        setWalletAccountId(accounts[0]._id);
+                      }
+                    }
+                    if (method === "cheque") {
                       if (paidAmount <= 0 && grandTotal > 0) setPaidAmount(grandTotal);
                       if (activeBankAccounts.length > 0 && !chequeBankAccountId) {
                         setChequeBankAccountId(activeBankAccounts[0]._id);
@@ -1020,6 +1242,12 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
                   <option value="cash">Cash</option>
                   <option value="cheque">Cheque</option>
                   <option value="credit">Credit</option>
+                  {isSpot ? (
+                    <>
+                      <option value="easypaisa">EasyPaisa</option>
+                      <option value="jazzcash">JazzCash</option>
+                    </>
+                  ) : null}
                 </Select>
               </div>
               <div>
@@ -1075,6 +1303,45 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
                   </div>
                 </>
               ) : null}
+              {isSpot && isWalletPayment ? (
+                <>
+                  <div>
+                    <Label htmlFor="spot-wallet-account">
+                      {paymentMethod === "easypaisa" ? "EasyPaisa" : "JazzCash"} account
+                    </Label>
+                    <PaymentAccountSelect
+                      id="spot-wallet-account"
+                      className="mt-1.5"
+                      value={walletAccountId}
+                      onChange={setWalletAccountId}
+                      accounts={walletAccounts}
+                      allowEmpty
+                      emptyLabel={`Select ${paymentMethod === "easypaisa" ? "EasyPaisa" : "JazzCash"} account`}
+                      emptyAccountsHint={
+                        paymentAccounts.isError
+                          ? "Unable to load payment accounts. Add accounts under Finance → Bank."
+                          : `No ${paymentMethod === "easypaisa" ? "EasyPaisa" : "JazzCash"} accounts registered. Add one under Finance → Bank.`
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="spot-wallet-last-four">
+                      Last 4 digits <span className="text-red-600">*</span>
+                    </Label>
+                    <Input
+                      id="spot-wallet-last-four"
+                      className="mt-1.5 font-mono tracking-widest"
+                      placeholder="e.g. 4829"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={4}
+                      value={walletLastFour}
+                      onChange={(e) => setWalletLastFour(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    />
+                    <p className="mt-1 text-xs text-zinc-500">Enter the last 4 digits of the wallet transaction ID.</p>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-800">
@@ -1107,7 +1374,9 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
               <Button variant="ghost" onClick={() => setCreateOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => void createPurchase()}>{isSpot ? "Save Spot Purchase" : "Create PO"}</Button>
+              <Button onClick={() => void createPurchase()}>
+                {isSpot ? (editingId ? "Update Spot Purchase" : "Save Spot Purchase") : "Create PO"}
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -1467,6 +1736,18 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteSpotTarget}
+        title="Delete Spot Purchase"
+        description={`Permanently delete this spot purchase from ${deleteSpotTarget?.supplier?.supplierName ?? "vendor"}? Stock will be reversed and this cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteSpotSubmitting}
+        onOpenChange={(open) => {
+          if (!open) setDeleteSpotTarget(null);
+        }}
+        onConfirm={() => void deleteSpotPurchase()}
+      />
 
       <ConfirmDialog
         open={returnConfirmOpen}

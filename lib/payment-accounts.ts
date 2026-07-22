@@ -6,7 +6,7 @@ export type ShopPaymentAccount = BankAccountInput & { _id: string };
 export const SHOP_ACCOUNT_PAYMENT_PREFIX = "account:";
 
 export function isShopAccountPaymentMethod(method: string) {
-  return method === "bank";
+  return method === "bank" || method === "easypaisa" || method === "jazzcash";
 }
 
 export function paymentMethodForAccount(account: Pick<ShopPaymentAccount, "accountType">) {

@@ -16,11 +16,12 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { IbanInput, bindBankAccountField, bindIbanField } from "@/components/ui/pakistan-fields";
+import { IbanInput, MobileInput, bindBankAccountField, bindIbanField, bindMobileField } from "@/components/ui/pakistan-fields";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrud } from "@/hooks/use-crud";
-import { formatPakistanIbanInput } from "@/lib/pakistan-validators";
+import { formatPakistanIbanInput, formatPakistanMobileDisplay } from "@/lib/pakistan-validators";
+import { shopAccountTypeLabel } from "@/lib/bank-labels";
 import { bankAccountFieldsSchema, bankAccountSchema } from "@/schemas/domain";
 import type { BankAccountInput } from "@/types";
 
@@ -40,6 +41,12 @@ const emptyValues: FormValues = {
   status: "active",
 };
 
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "bank", label: "Bank account" },
+  { value: "easypaisa", label: "EasyPaisa" },
+  { value: "jazzcash", label: "JazzCash" },
+] as const;
+
 export function BankAccountsPanel() {
   const queryClient = useQueryClient();
   const { list, create, update, remove } = useCrud<BankAccountInput, BankAccount>("bank-accounts", { limit: 100, status: "" });
@@ -48,6 +55,8 @@ export function BankAccountsPanel() {
   const [deleteTarget, setDeleteTarget] = useState<BankAccount | null>(null);
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: emptyValues });
+  const accountType = form.watch("accountType") ?? "bank";
+  const isWallet = accountType === "easypaisa" || accountType === "jazzcash";
 
   const openCreate = () => {
     setEditing(null);
@@ -58,7 +67,7 @@ export function BankAccountsPanel() {
   const openEdit = (item: BankAccount) => {
     setEditing(item);
     form.reset({
-      accountType: "bank",
+      accountType: item.accountType ?? "bank",
       name: item.name,
       accountTitle: item.accountTitle,
       accountNumber: item.accountNumber,
@@ -108,7 +117,7 @@ export function BankAccountsPanel() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-zinc-950">Bank accounts</h3>
-          <p className="text-sm text-zinc-500">Register bank accounts for deposits, cheque payments, and transfers.</p>
+          <p className="text-sm text-zinc-500">Register bank and digital accounts for deposits, payments, and transfers.</p>
         </div>
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4" />
@@ -120,6 +129,7 @@ export function BankAccountsPanel() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
             <tr>
+              <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Account title</th>
               <th className="px-4 py-3 font-medium">Account number</th>
@@ -130,21 +140,28 @@ export function BankAccountsPanel() {
           </thead>
           <tbody>
             {list.isLoading ? (
-              <TableLoader colSpan={6} label="Loading bank accounts..." />
+              <TableLoader colSpan={7} label="Loading bank accounts..." />
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">
-                  No bank accounts yet. Add the bank accounts your shop uses.
+                <td colSpan={7} className="px-4 py-10 text-center text-zinc-500">
+                  No accounts yet. Add the bank and digital accounts your shop uses.
                 </td>
               </tr>
             ) : (
-              items.map((item) => (
+              items.map((item) => {
+                const wallet = item.accountType === "easypaisa" || item.accountType === "jazzcash";
+                return (
                 <tr key={item._id} className="border-t border-zinc-100 hover:bg-emerald-50/60">
+                  <td className="px-4 py-3">
+                    <Badge variant="default">{shopAccountTypeLabel(item.accountType)}</Badge>
+                  </td>
                   <td className="px-4 py-3 font-medium">{item.name}</td>
                   <td className="px-4 py-3">{item.accountTitle}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{item.accountNumber}</td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {wallet ? formatPakistanMobileDisplay(item.accountNumber) : item.accountNumber}
+                  </td>
                   <td className="px-4 py-3 text-zinc-500">
-                    {[item.branch, item.iban].filter(Boolean).join(" · ") || "—"}
+                    {wallet ? "—" : [item.branch, item.iban].filter(Boolean).join(" · ") || "—"}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={item.status === "active" ? "success" : "default"}>{item.status}</Badge>
@@ -160,18 +177,40 @@ export function BankAccountsPanel() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent title={editing ? "Edit bank account" : "Add bank account"} description="This account appears when recording deposits and bank payments.">
+        <DialogContent title={editing ? "Edit account" : "Add bank account"} description="This account appears when recording deposits and bank payments.">
           <form onSubmit={onSubmit} className="space-y-4">
             <div>
+              <Label htmlFor="account-type">Account type</Label>
+              <Select
+                id="account-type"
+                className="mt-1.5"
+                {...form.register("accountType")}
+                disabled={!!editing}
+              >
+                {ACCOUNT_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <FieldError message={form.formState.errors.accountType?.message} />
+            </div>
+            <div>
               <Label htmlFor="bank-name">Display name / label</Label>
-              <Input id="bank-name" className="mt-1.5" placeholder="e.g. HBL Main Branch" {...form.register("name")} />
+              <Input
+                id="bank-name"
+                className="mt-1.5"
+                placeholder={isWallet ? "e.g. Shop EasyPaisa" : "e.g. HBL Main Branch"}
+                {...form.register("name")}
+              />
               <FieldError message={form.formState.errors.name?.message} />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -181,30 +220,40 @@ export function BankAccountsPanel() {
                 <FieldError message={form.formState.errors.accountTitle?.message} />
               </div>
               <div>
-                <Label htmlFor="account-number">Account number</Label>
-                <Input
-                  id="account-number"
-                  className="mt-1.5 font-mono"
-                  inputMode="numeric"
-                  maxLength={20}
-                  placeholder="6–20 digits"
-                  {...bindBankAccountField(form.register, "accountNumber")}
-                />
+                <Label htmlFor="account-number">{isWallet ? "Mobile / merchant ID" : "Account number"}</Label>
+                {isWallet ? (
+                  <MobileInput
+                    id="account-number"
+                    className="mt-1.5 font-mono"
+                    {...bindMobileField(form.register, "accountNumber")}
+                  />
+                ) : (
+                  <Input
+                    id="account-number"
+                    className="mt-1.5 font-mono"
+                    inputMode="numeric"
+                    maxLength={20}
+                    placeholder="6–20 digits"
+                    {...bindBankAccountField(form.register, "accountNumber")}
+                  />
+                )}
                 <FieldError message={form.formState.errors.accountNumber?.message} />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="branch">Branch</Label>
-                <Input id="branch" className="mt-1.5" {...form.register("branch")} />
-                <FieldError message={form.formState.errors.branch?.message} />
+            {!isWallet ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="branch">Branch</Label>
+                  <Input id="branch" className="mt-1.5" {...form.register("branch")} />
+                  <FieldError message={form.formState.errors.branch?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="iban">IBAN (optional)</Label>
+                  <IbanInput id="iban" className="mt-1.5 font-mono" {...bindIbanField(form.register, "iban")} />
+                  <FieldError message={form.formState.errors.iban?.message} />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="iban">IBAN (optional)</Label>
-                <IbanInput id="iban" className="mt-1.5 font-mono" {...bindIbanField(form.register, "iban")} />
-                <FieldError message={form.formState.errors.iban?.message} />
-              </div>
-            </div>
+            ) : null}
             <div>
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" className="mt-1.5" {...form.register("notes")} />

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { ApiRequestError } from "@/lib/api-errors";
 
 type ListResponse<T> = {
   items: T[];
@@ -37,9 +38,17 @@ export function useCrud<TInput, TItem extends { _id: string }>(resource: string,
   const list = useQuery({
     queryKey: [resource, params],
     queryFn: async () => {
-      const response = await fetch(`/api/${resource}${queryString}`);
-      if (!response.ok) throw new Error("Unable to load data");
-      return response.json() as Promise<ListResponse<TItem>>;
+      const response = await fetch(`/api/${resource}${queryString}`, { cache: "no-store" });
+      const data = (await response.json().catch(() => ({}))) as Partial<ListResponse<TItem>> & { error?: string };
+      if (!response.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Unable to load data");
+      }
+      return {
+        items: Array.isArray(data.items) ? data.items : [],
+        total: Number(data.total ?? 0),
+        page: Number(data.page ?? params.page ?? 1),
+        pages: Number(data.pages ?? 1),
+      };
     },
   });
 
@@ -53,7 +62,12 @@ export function useCrud<TInput, TItem extends { _id: string }>(resource: string,
         body: JSON.stringify(input),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to save");
+      if (!response.ok) {
+        throw new ApiRequestError(data.error ?? "Unable to save", response.status, {
+          code: data.code,
+          fieldErrors: data.fieldErrors,
+        });
+      }
       return data as TItem;
     },
     onSuccess: invalidate,
@@ -67,7 +81,12 @@ export function useCrud<TInput, TItem extends { _id: string }>(resource: string,
         body: JSON.stringify(input),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to update");
+      if (!response.ok) {
+        throw new ApiRequestError(data.error ?? "Unable to update", response.status, {
+          code: data.code,
+          fieldErrors: data.fieldErrors,
+        });
+      }
       return data as TItem;
     },
     onSuccess: invalidate,
@@ -77,7 +96,12 @@ export function useCrud<TInput, TItem extends { _id: string }>(resource: string,
     mutationFn: async (id: string) => {
       const response = await fetch(`/api/${resource}/${id}`, { method: "DELETE" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to delete");
+      if (!response.ok) {
+        throw new ApiRequestError(data.error ?? "Unable to delete", response.status, {
+          code: data.code,
+          fieldErrors: data.fieldErrors,
+        });
+      }
       return data;
     },
     onSuccess: invalidate,

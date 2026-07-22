@@ -60,11 +60,12 @@ export function SuperAdminShops() {
   const [status, setStatus] = useState("");
   const [expiryFilter, setExpiryFilter] = useState("");
   const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject" | "suspend"; name: string } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const statsQuery = useQuery({
     queryKey: ["super-admin-shop-stats"],
     queryFn: async () => {
-      const res = await fetch("/api/super-admin/shops?stats=1");
+      const res = await fetch("/api/super-admin/shops?stats=1", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load stats");
       return res.json() as Promise<MonitorStats>;
     },
@@ -77,7 +78,7 @@ export function SuperAdminShops() {
       if (q) params.set("q", q);
       if (status) params.set("status", status);
       if (expiryFilter) params.set("expiryFilter", expiryFilter);
-      const res = await fetch(`/api/super-admin/shops?${params.toString()}`);
+      const res = await fetch(`/api/super-admin/shops?${params.toString()}`, { cache: "no-store" });
       const data = (await res.json()) as { items?: ShopRow[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to load shops");
       return data.items ?? [];
@@ -160,9 +161,22 @@ export function SuperAdminShops() {
         <Button
           type="button"
           variant="secondary"
+          loading={refreshing}
+          loadingLabel="Refreshing..."
           onClick={() => {
-            void shopsQuery.refetch();
-            void statsQuery.refetch();
+            void (async () => {
+              setRefreshing(true);
+              try {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["super-admin-shops"] }),
+                  queryClient.invalidateQueries({ queryKey: ["super-admin-shop-stats"] }),
+                ]);
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Unable to refresh shops.");
+              } finally {
+                setRefreshing(false);
+              }
+            })();
           }}
         >
           Refresh

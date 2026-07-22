@@ -20,6 +20,13 @@ export function validatePaymentReference(value: string): string | null {
   return null;
 }
 
+export function validateWalletLastFourDigits(value: string): string | null {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "Last 4 digits are required.";
+  if (digits.length !== 4) return "Enter exactly 4 digits.";
+  return null;
+}
+
 export function normalizePaymentReference(value: string) {
   return value.trim();
 }
@@ -93,7 +100,7 @@ export function buildSalePayload(params: BuildSaleParams) {
     pointsRedeemed,
     groupDiscount,
     chequeNumber: params.paymentMethod === "cheque" ? params.chequeNumber?.trim() ?? "" : "",
-    bankName: ["cheque", "bank"].includes(params.paymentMethod)
+    bankName: ["cheque", "bank", "easypaisa", "jazzcash"].includes(params.paymentMethod)
       ? params.bankName?.trim() ?? ""
       : "",
     chequeDate: params.paymentMethod === "cheque" ? params.chequeDate ?? null : null,
