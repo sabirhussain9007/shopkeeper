@@ -8,22 +8,28 @@ import {
   AlertTriangle,
   Boxes,
   CalendarClock,
+  ClipboardList,
   CreditCard,
   DollarSign,
   Download,
+  History,
   Package,
   PackageX,
   Printer,
+  Settings,
+  ShoppingCart,
   TrendingUp,
   UserCheck,
   UserMinus,
   Users,
   Wallet,
 } from "lucide-react";
+import Link from "next/link";
 import { Invoice } from "@/components/printing/invoice";
 import { Card, Surface } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatActivityActionLabel } from "@/lib/activity-labels";
 import { downloadInvoicePdf } from "@/lib/download-invoice-pdf";
 import { currency, formatPakistanDate, formatPakistanDateTime } from "@/lib/utils";
 
@@ -57,7 +63,9 @@ type Summary = {
     _id: string;
     action: string;
     description: string;
+    module?: string;
     userName?: string;
+    userRole?: string;
     createdAt?: string;
   }>;
   lowStock?: Array<{ _id: string; productName: string; quantity: number; reorderLevel: number }>;
@@ -149,6 +157,19 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
   ]);
   const percentCardLabels = new Set(["Profit Margin %"]);
   const business = summary.settings ?? { businessName: "Shopkeeper" };
+  const activityItems = summary.recentActivity ?? [];
+
+  function activityModuleIcon(module?: string) {
+    const key = (module ?? "").toLowerCase();
+    if (key === "pos") return ShoppingCart;
+    if (key === "inventory") return Package;
+    if (key === "customers") return Users;
+    if (key === "employees" || key === "attendance" || key === "salaries") return UserCheck;
+    if (key === "expenses") return Wallet;
+    if (key === "settings" || key === "auth") return Settings;
+    if (key === "subscription") return CalendarClock;
+    return History;
+  }
 
   const printInvoice = useReactToPrint({
     contentRef: invoiceRef,
@@ -307,31 +328,73 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
             </div>
           </Surface>
 
-          {(summary.recentActivity?.length ?? 0) > 0 ? (
-            <Surface>
-              <div className="mb-4">
+          <Surface>
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
                 <h2 className="text-xl font-semibold">Recent Activity</h2>
                 <p className="text-sm text-zinc-500">Latest actions across the shop.</p>
               </div>
-              <ul className="space-y-3">
-                {summary.recentActivity!.map((item) => (
-                  <li key={item._id} className="rounded-xl border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-800">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.description || item.action}</p>
-                        <p className="mt-0.5 text-xs text-zinc-500">
-                          {[item.userName, item.action].filter(Boolean).join(" · ")}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-xs text-zinc-400">
-                        {formatPakistanDateTime(item.createdAt, "")}
+              <Link
+                href="/activity"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 transition hover:text-emerald-800"
+              >
+                <ClipboardList className="h-4 w-4" />
+                View all
+              </Link>
+            </div>
+
+            {activityItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-10 text-center">
+                <History className="mx-auto h-8 w-8 text-zinc-300" />
+                <p className="mt-3 text-sm font-medium text-zinc-600">No activity yet</p>
+                <p className="mt-1 text-xs text-zinc-500">Sales, inventory changes, and user actions will appear here.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-zinc-100">
+                {activityItems.map((item) => {
+                  const ModuleIcon = activityModuleIcon(item.module);
+                  const when = item.createdAt ? formatPakistanDateTime(item.createdAt) : "—";
+                  const actionLabel = formatActivityActionLabel(item.action);
+                  return (
+                    <li key={item._id} className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+                        <ModuleIcon className="h-4 w-4" />
                       </span>
-                    </div>
-                  </li>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                          <p className="font-medium text-zinc-900">{item.description || actionLabel}</p>
+                          <time className="shrink-0 text-xs text-zinc-400" dateTime={item.createdAt}>
+                            {when}
+                          </time>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                          <span className="font-medium text-zinc-600">{item.userName || "System"}</span>
+                          {item.module ? (
+                            <>
+                              <span className="text-zinc-300">·</span>
+                              <span>{item.module}</span>
+                            </>
+                          ) : null}
+                          {item.userRole ? (
+                            <>
+                              <span className="text-zinc-300">·</span>
+                              <span className="capitalize">{item.userRole}</span>
+                            </>
+                          ) : null}
+                          {item.description ? (
+                            <>
+                              <span className="text-zinc-300">·</span>
+                              <span>{actionLabel}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
-            </Surface>
-          ) : null}
+            )}
+          </Surface>
         </div>
         <Card>
           <h2 className="text-xl font-semibold">Low Stock Alerts</h2>

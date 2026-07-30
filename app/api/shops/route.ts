@@ -17,13 +17,17 @@ export async function POST(req: NextRequest) {
     plan: parsed.data.plan,
     paymentMethod: parsed.data.paymentMethod,
     paymentReference: parsed.data.paymentReference,
+    payOnline: parsed.data.payOnline,
   });
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json(
     {
       ...result.shop,
-      message: "Shop created. Your payment is pending verification by the platform admin.",
+      message:
+        parsed.data.paymentMethod === "stripe"
+          ? "Shop created. Continue to secure checkout to activate your subscription."
+          : "Shop created. Your payment is pending verification by the platform admin.",
     },
     { status: 201 },
   );

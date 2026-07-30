@@ -4,45 +4,73 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, BadgeCheck, Building2, Clock, Receipt, ShieldCheck, Store, Wallet } from "lucide-react";
-import { Loader } from "@/components/ui/loader";
+import { ArrowLeft, BadgeCheck, Clock, Receipt, ShieldCheck, Store, Wallet } from "lucide-react";
+import { SubscriptionPaymentPicker, type WalletPaymentChannel } from "@/components/saas/subscription-payment-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createShopSchema } from "@/schemas/domain";
 import { MobileInput, formatMobileOnInput } from "@/components/ui/pakistan-fields";
 import { MOBILE_PLACEHOLDER } from "@/lib/pakistan-validators";
-import { SHOP_PLANS, type ShopPlanId } from "@/lib/saas";
+import type { PlatformPaymentAccounts } from "@/lib/payment-env";
+import { SHOP_PLANS, type ShopPlanId, type ShopPaymentMethod } from "@/lib/saas";
 import { cn } from "@/lib/utils";
+import { createShopSchema } from "@/schemas/domain";
 
 type PricingResponse = {
-  paymentAccounts: {
-    bank: { bankName: string; accountTitle: string; accountNumber: string };
-  };
+  paymentAccounts: PlatformPaymentAccounts | null;
+  paymentConfigError?: string;
+  stripeEnabled?: boolean;
+  walletGateways?: { easypaisa: boolean; jazzcash: boolean };
 };
 
-const steps = [
-  { icon: Wallet, title: "Pay outside the app", text: "Send the plan amount to the account shown." },
+const stepsWalletApp = [
+  { icon: Wallet, title: "Pay in EasyPaisa or JazzCash app", text: "Open your wallet app and pay online." },
+  { icon: Receipt, title: "Confirm payment", text: "Submit your transaction ID or complete secure checkout." },
+  { icon: ShieldCheck, title: "Get access", text: "Instant activation with gateway, or admin verification for app pay." },
+] as const;
+
+const stepsManual = [
+  { icon: Wallet, title: "Pay via EasyPaisa, JazzCash, or bank", text: "Send the plan amount to the account shown." },
   { icon: Receipt, title: "Submit transaction ID", text: "Paste your receipt or TID below." },
   { icon: ShieldCheck, title: "Wait for approval", text: "Super admin verifies and activates your shop." },
+] as const;
+
+const stepsStripe = [
+  { icon: Wallet, title: "Pay online", text: "Secure card payment via Stripe checkout." },
+  { icon: ShieldCheck, title: "Instant activation", text: "Your shop activates automatically after payment." },
+  { icon: Store, title: "Start selling", text: "Sign in and use your shop right away." },
 ] as const;
 
 export function CreateShopForm() {
   const router = useRouter();
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(true);
   const [plan, setPlan] = useState<ShopPlanId>("monthly");
+  const [paymentMode, setPaymentMode] = useState<ShopPaymentMethod>("easypaisa");
+  const [paymentChannel, setPaymentChannel] = useState<WalletPaymentChannel>("app");
   const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     void fetch("/api/shops/pricing")
-      .then((res) => res.json())
-      .then((data: PricingResponse) => setPricing(data))
-      .catch(() => toast.error("Could not load pricing."));
+      .then(async (res) => {
+        const data = (await res.json()) as PricingResponse & { error?: string };
+        if (!res.ok) {
+          throw new Error(data.error ?? data.paymentConfigError ?? "Could not load pricing.");
+        }
+        setPricing(data);
+        if (data.stripeEnabled) setPaymentMode("stripe");
+      })
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : "Could not load pricing.");
+      })
+      .finally(() => setPricingLoading(false));
   }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsPending(true);
     const form = new FormData(event.currentTarget);
+    const payOnline =
+      paymentChannel === "app" && (paymentMode === "easypaisa" || paymentMode === "jazzcash");
     const payload = {
       shopName: String(form.get("shopName") ?? ""),
       ownerName: String(form.get("ownerName") ?? ""),
@@ -51,8 +79,9 @@ export function CreateShopForm() {
       password: String(form.get("password") ?? ""),
       confirmPassword: String(form.get("confirmPassword") ?? ""),
       plan,
-      paymentMethod: "bank" as const,
-      paymentReference: String(form.get("paymentReference") ?? ""),
+      paymentMethod: paymentMode,
+      paymentReference: payOnline || paymentMode === "stripe" ? "" : String(form.get("paymentReference") ?? ""),
+      payOnline,
     };
 
     const parsed = createShopSchema.safeParse(payload);
@@ -67,20 +96,49 @@ export function CreateShopForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
     });
-    const data = (await res.json()) as { error?: string; message?: string };
-    setIsPending(false);
-
+    const data = (await res.json()) as { error?: string; message?: string; id?: string };
     if (!res.ok) {
+      setIsPending(false);
       toast.error(data.error ?? "Could not create shop.");
       return;
     }
 
+    if (paymentMode === "stripe" && data.id) {
+      const checkoutRes = await fetch("/api/shops/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shopId: data.id }),
+      });
+      const checkout = (await checkoutRes.json()) as { error?: string; url?: string };
+      setIsPending(false);
+      if (!checkoutRes.ok || !checkout.url) {
+        toast.error(checkout.error ?? "Could not start online payment.");
+        return;
+      }
+      window.location.href = checkout.url;
+      return;
+    }
+
+    if (payOnline && data.id) {
+      setIsPending(false);
+      router.push(`/create-shop/pay?shopId=${data.id}&provider=${paymentMode}`);
+      return;
+    }
+
+    setIsPending(false);
     toast.success(data.message ?? "Shop submitted for approval.");
     router.push("/login?created=1");
   }
 
-  const accounts = pricing?.paymentAccounts;
   const selectedPlan = SHOP_PLANS[plan];
+  const stripeEnabled = pricing?.stripeEnabled ?? false;
+  const walletAppPay =
+    paymentChannel === "app" && (paymentMode === "easypaisa" || paymentMode === "jazzcash");
+  const steps =
+    paymentMode === "stripe" && stripeEnabled ? stepsStripe : walletAppPay ? stepsWalletApp : stepsManual;
+  const needsManualReference =
+    paymentMode === "bank" ||
+    ((paymentMode === "easypaisa" || paymentMode === "jazzcash") && paymentChannel === "manual");
 
   return (
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f2420]/95 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl">
@@ -107,7 +165,9 @@ export function CreateShopForm() {
                 <span className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">Shopkeeper SaaS</span>
               </div>
               <h1 className="font-[family-name:var(--font-landing-display)] text-4xl leading-none text-white md:text-5xl">Create your shop</h1>
-              <p className="mt-3 text-base text-emerald-50/70 md:text-lg">Open your till in three steps. No in-app payment — just transfer and get verified.</p>
+              <p className="mt-3 text-base text-emerald-50/70 md:text-lg">
+                Pay with EasyPaisa, JazzCash, bank transfer{stripeEnabled ? ", or card online" : ""}. Get verified and start selling.
+              </p>
             </div>
           </div>
 
@@ -209,60 +269,49 @@ export function CreateShopForm() {
         </section>
 
         <section>
-          <h2 className="font-[family-name:var(--font-landing-display)] text-2xl">Bank transfer</h2>
-          <p className="mb-4 text-sm text-zinc-500">Transfer Rs. {selectedPlan.amount} to the bank account below, then submit your TID.</p>
+          <h2 className="font-[family-name:var(--font-landing-display)] text-2xl">Payment</h2>
+          <p className="mb-4 text-sm text-zinc-500">Rs. {selectedPlan.amount} for the {selectedPlan.label.toLowerCase()} plan.</p>
 
-          <div className="rounded-[1.5rem] border border-emerald-900/10 bg-[#0f2420] p-5 text-white md:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-400 text-[#0c1f1a]">
-                  <Building2 className="h-5 w-5" />
-                </span>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Send payment to</p>
-                  <p className="mt-1 font-[family-name:var(--font-landing-display)] text-2xl">
-                    Rs. {selectedPlan.amount}
-                    <span className="ml-2 text-base font-normal text-emerald-100/60">· Bank transfer</span>
-                  </p>
-                </div>
-              </div>
-              <span className="rounded-full border border-white/15 px-3 py-1 text-xs text-emerald-100/70">{selectedPlan.label} plan</span>
+          <SubscriptionPaymentPicker
+            accounts={pricing?.paymentAccounts ?? null}
+            amount={selectedPlan.amount}
+            planLabel={selectedPlan.label}
+            method={paymentMode}
+            onMethodChange={(method) => {
+              setPaymentMode(method);
+              if (method === "bank") setPaymentChannel("manual");
+            }}
+            paymentChannel={paymentChannel}
+            onPaymentChannelChange={setPaymentChannel}
+            stripeEnabled={stripeEnabled}
+            walletGateways={pricing?.walletGateways}
+            loading={pricingLoading}
+            configError={pricing?.paymentConfigError}
+          />
+
+          {needsManualReference ? (
+            <div className="mt-4">
+              <label htmlFor="paymentReference" className="mb-2 block text-sm font-medium text-zinc-700">
+                Transaction / receipt ID
+              </label>
+              <Input id="paymentReference" name="paymentReference" placeholder="e.g. TID-48291037" required className="bg-white" />
             </div>
-
-            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 font-mono text-sm">
-              {accounts ? (
-                <div className="space-y-1.5">
-                  <p>
-                    <span className="text-emerald-300/70">Bank</span>
-                    <span className="ml-3 text-white">{accounts.bank.bankName}</span>
-                  </p>
-                  <p>
-                    <span className="text-emerald-300/70">Title</span>
-                    <span className="ml-3 text-white">{accounts.bank.accountTitle}</span>
-                  </p>
-                  <p>
-                    <span className="text-emerald-300/70">Account</span>
-                    <span className="ml-3 text-lg tracking-wide text-white">{accounts.bank.accountNumber}</span>
-                  </p>
-                </div>
-              ) : (
-                <Loader label="Loading bank account…" variant="inline" className="text-emerald-100/60" />
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label htmlFor="paymentReference" className="mb-2 block text-sm font-medium text-zinc-700">
-              Transaction / receipt ID
-            </label>
-            <Input id="paymentReference" name="paymentReference" placeholder="e.g. TID-48291037" required className="bg-white" />
-          </div>
+          ) : null}
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-6">
-          <p className="text-sm text-zinc-500">Already registered? <Link href="/login" className="font-medium text-emerald-700 hover:underline">Login</Link></p>
+          <p className="text-sm text-zinc-500">
+            Already registered?{" "}
+            <Link href="/login" className="font-medium text-emerald-700 hover:underline">
+              Login
+            </Link>
+          </p>
           <Button type="submit" loading={isPending} loadingLabel="Submitting..." className="min-w-44">
-            Submit for approval
+            {paymentMode === "stripe" && stripeEnabled
+              ? "Continue to payment"
+              : walletAppPay
+                ? "Continue to pay in app"
+                : "Submit for approval"}
           </Button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Download, Plus, TrendingUp } from "lucide-react";
+import { Download, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { TableLoader } from "@/components/ui/loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,11 +69,13 @@ function profitInfo(purchase: number, selling: number) {
 }
 
 export function InventoryManager() {
-  const { list, create, params, setParams } = useCrud<ProductInput, Product>("products");
+  const { list, create, update, remove, params, setParams } = useCrud<ProductInput, Product>("products");
   const categoriesCrud = useCrud<CategoryInput, Category>("categories", { limit: 100 });
   const vendorsCrud = useCrud<SupplierInput, Vendor>("suppliers", { limit: 100 });
   const brandsCrud = useCrud<BrandInput, Brand>("brands", { limit: 100 });
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: emptyValues });
   const purchasePrice = form.watch("purchasePrice");
@@ -86,8 +89,64 @@ export function InventoryManager() {
   const vendorNameById = useMemo(() => new Map(vendors.map((v) => [resourceId(v._id), v.supplierName])), [vendors]);
 
   const openCreate = () => {
+    setEditing(null);
     form.reset(emptyValues);
     setDialogOpen(true);
+  };
+
+  const openEdit = (item: Product) => {
+    setEditing(item);
+    form.reset({
+      productName: item.productName,
+      sku: item.sku,
+      barcode: item.barcode ?? "",
+      category: resourceId(item.category),
+      brandId: resourceId(item.brandId),
+      unit: item.unit ?? "pcs",
+      purchasePrice: item.purchasePrice,
+      sellingPrice: item.sellingPrice,
+      taxRate: item.taxRate,
+      quantity: item.quantity,
+      reorderLevel: item.reorderLevel,
+      supplier: resourceId(item.supplier),
+      productImage: item.productImage ?? "",
+      description: item.description ?? "",
+      status: item.status,
+    });
+    setDialogOpen(true);
+  };
+
+  const onDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await remove.mutateAsync(resourceId(deleteTarget._id));
+      toast.success(isRecordDeleted(deleteTarget) ? "Product permanently deleted." : "Product deleted.");
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete product.");
+    }
+  };
+
+  const onRestore = async (item: Product) => {
+    try {
+      const response = await fetch(`/api/products/${resourceId(item._id)}/restore`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Unable to restore product.");
+      toast.success(`"${item.productName}" restored.`);
+      await list.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to restore product.");
+    }
+  };
+
+  const buildPayload = (values: FormValues) => {
+    const parsed = formSchema.parse(values);
+    const brandRecord = brands.find((brand) => brand._id === parsed.brandId);
+    return {
+      ...parsed,
+      brand: brandRecord?.name ?? "",
+      productImage: parsed.productImage || "",
+    };
   };
 
   const onSearch = useCallback((q: string) => setParams((p) => ({ ...p, q: q || undefined, page: 1 })), [setParams]);
@@ -95,15 +154,14 @@ export function InventoryManager() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      const parsed = formSchema.parse(values);
-      const brandRecord = brands.find((brand) => brand._id === parsed.brandId);
-      const payload = {
-        ...parsed,
-        brand: brandRecord?.name ?? "",
-        productImage: parsed.productImage || "",
-      };
-      await create.mutateAsync(payload);
-      toast.success("Product created.");
+      const payload = buildPayload(values);
+      if (editing) {
+        await update.mutateAsync({ id: resourceId(editing._id), input: payload });
+        toast.success("Product updated.");
+      } else {
+        await create.mutateAsync(payload);
+        toast.success("Product created.");
+      }
       setDialogOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save product.");
@@ -120,7 +178,7 @@ export function InventoryManager() {
   };
 
   const items = list.data?.items ?? [];
-  const isSaving = create.isPending;
+  const isSaving = create.isPending || update.isPending;
   const isLoading = list.isPending || list.isFetching;
 
   return (
@@ -161,14 +219,15 @@ export function InventoryManager() {
                 <th className="px-4 py-3 font-medium">Profit</th>
                 <th className="px-4 py-3 font-medium">Vendor</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && items.length === 0 ? (
-                <TableLoader colSpan={8} label="Loading products..." />
+                <TableLoader colSpan={9} label="Loading products..." />
               ) : list.isError ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
                     <p>{list.error instanceof Error ? list.error.message : "Unable to load products."}</p>
                     <Button className="mt-3" size="sm" variant="secondary" onClick={() => void list.refetch()}>
                       Retry
@@ -177,7 +236,7 @@ export function InventoryManager() {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
                     No products found. Add your first product.
                   </td>
                 </tr>
@@ -209,6 +268,29 @@ export function InventoryManager() {
                       <td className="px-4 py-3">
                         <Badge variant={item.status === "active" ? "success" : "default"}>{item.status}</Badge>
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          {deleted ? (
+                            <>
+                              <Button size="sm" variant="secondary" onClick={() => void onRestore(item)}>
+                                Restore
+                              </Button>
+                              <Button size="sm" variant="danger" onClick={() => setDeleteTarget(item)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="danger" onClick={() => setDeleteTarget(item)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -225,7 +307,11 @@ export function InventoryManager() {
       </Surface>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent title="New Product" description="Track pricing, stock, tax, and category." className="max-w-3xl">
+        <DialogContent
+          title={editing ? "Edit Product" : "New Product"}
+          description="Track pricing, stock, tax, and category."
+          className="max-w-3xl"
+        >
           <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <Label htmlFor="productName">Product Name</Label>
@@ -327,12 +413,29 @@ export function InventoryManager() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Create Product"}
+                {isSaving ? "Saving..." : editing ? "Save changes" : "Create Product"}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={deleteTarget && isRecordDeleted(deleteTarget) ? "Permanently delete product" : "Delete product"}
+        description={
+          deleteTarget
+            ? isRecordDeleted(deleteTarget)
+              ? `Permanently remove "${deleteTarget.productName}"? This cannot be undone.`
+              : `Delete "${deleteTarget.productName}"? You can restore it later.`
+            : ""
+        }
+        confirmLabel={deleteTarget && isRecordDeleted(deleteTarget) ? "Delete permanently" : "Delete"}
+        confirmVariant="danger"
+        isPending={remove.isPending}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => void onDelete()}
+      />
     </div>
   );
 }

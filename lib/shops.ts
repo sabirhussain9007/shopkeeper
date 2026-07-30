@@ -1,7 +1,15 @@
 import bcrypt from "bcryptjs";
 import { Types } from "mongoose";
 import { connectDb } from "@/lib/db";
-import { getPlanExpiry, getRemainingDays, SHOP_PLANS, slugifyShopName, type ShopPlanId, type ShopPaymentMethod } from "@/lib/saas";
+import {
+  getPlanExpiry,
+  getRemainingDays,
+  isManualShopPaymentMethod,
+  SHOP_PLANS,
+  slugifyShopName,
+  type ShopPlanId,
+  type ShopPaymentMethod,
+} from "@/lib/saas";
 import { Setting, Shop, User } from "@/models";
 import { defaultSettings } from "@/lib/settings";
 import { rolePermissions } from "@/types";
@@ -15,6 +23,7 @@ export type CreateShopInput = {
   plan: ShopPlanId;
   paymentMethod: ShopPaymentMethod;
   paymentReference: string;
+  payOnline?: boolean;
 };
 
 export async function createShopRegistration(input: CreateShopInput) {
@@ -24,8 +33,13 @@ export async function createShopRegistration(input: CreateShopInput) {
     return { ok: false as const, status: 409, error: "An account with this email already exists." };
   }
 
-  const paymentReference = input.paymentReference.trim();
-  if (paymentReference.length < 3) {
+  const paymentReference =
+    input.paymentMethod === "stripe"
+      ? "STRIPE_PENDING"
+      : input.payOnline && (input.paymentMethod === "easypaisa" || input.paymentMethod === "jazzcash")
+        ? "APP_PAY_PENDING"
+        : input.paymentReference.trim();
+  if (isManualShopPaymentMethod(input.paymentMethod) && !input.payOnline && paymentReference.length < 3) {
     return { ok: false as const, status: 422, error: "Enter your payment receipt / transaction ID." };
   }
 
@@ -101,6 +115,7 @@ export async function listShops(params?: {
       { ownerEmail: { $regex: params.q, $options: "i" } },
       { ownerName: { $regex: params.q, $options: "i" } },
       { slug: { $regex: params.q, $options: "i" } },
+      { paymentReference: { $regex: params.q, $options: "i" } },
     ];
   }
   const skip = (page - 1) * limit;
@@ -193,6 +208,45 @@ export async function approveShop(shopId: string, adminId: string) {
   shop.updatedBy = new Types.ObjectId(adminId);
   await shop.save();
   return { ok: true as const, shop };
+}
+
+export async function activateShopAfterGatewayPayment(
+  shopId: string,
+  gatewayTxnId: string,
+  gatewayResponse: unknown,
+  planOverride?: ShopPlanId,
+) {
+  await connectDb();
+  const shop = await Shop.findOne({ _id: shopId, deletedAt: { $exists: false } });
+  if (!shop) return { ok: false as const, status: 404, error: "Shop not found." };
+
+  if (shop.gatewayTxnId === gatewayTxnId && shop.paymentStatus === "approved" && shop.status === "active") {
+    return { ok: true as const, shop, alreadyProcessed: true };
+  }
+
+  const plan = planOverride ?? (shop.plan as ShopPlanId);
+  const now = new Date();
+  const extendFrom =
+    shop.status === "active" && shop.expiresAt && new Date(shop.expiresAt).getTime() > now.getTime()
+      ? new Date(shop.expiresAt)
+      : now;
+
+  shop.plan = plan;
+  shop.planAmount = SHOP_PLANS[plan].amount;
+  shop.paymentMethod =
+    shop.paymentMethod === "easypaisa" || shop.paymentMethod === "jazzcash" ? shop.paymentMethod : "stripe";
+  shop.paymentReference = gatewayTxnId;
+  shop.paymentStatus = "approved";
+  shop.status = "active";
+  shop.gatewayTxnId = gatewayTxnId;
+  shop.gatewayResponse = gatewayResponse;
+  shop.paidAt = now;
+  shop.startsAt = shop.startsAt ?? now;
+  shop.expiresAt = getPlanExpiry(plan, extendFrom);
+  shop.approvedAt = shop.approvedAt ?? now;
+  shop.rejectionReason = undefined;
+  await shop.save();
+  return { ok: true as const, shop, alreadyProcessed: false };
 }
 
 export async function rejectShop(shopId: string, adminId: string, reason?: string) {

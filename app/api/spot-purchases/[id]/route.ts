@@ -15,7 +15,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const result = await updateSpotPurchase(id, parsed.data, allowed.session.user.id, allowed.session.user.shopId!);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: "status" in result ? result.status : 400 });
+    const status = "status" in result && typeof result.status === "number" ? result.status : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json(result.purchase);
 }
@@ -27,7 +28,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const result = await deleteSpotPurchase(id, allowed.session.user.id, allowed.session.user.shopId!);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: "status" in result ? result.status : 400 });
+    const status = "status" in result && typeof result.status === "number" ? result.status : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import type { NextRequest } from "next/server";
+import { moduleFromAction } from "@/lib/activity-labels";
 import { connectDb } from "@/lib/db";
 import { getClientDeviceInfo, type ClientDeviceInfo, type HeaderSource } from "@/lib/request-meta";
 import { ActivityLog, Shop } from "@/models";
@@ -24,32 +25,6 @@ export type LogActivityInput = {
   userAgent?: string;
   req?: NextRequest | Request | { headers?: HeaderSource } | null;
 };
-
-const MODULE_BY_ENTITY: Record<string, string> = {
-  user: "Auth",
-  auth: "Auth",
-  product: "Inventory",
-  category: "Inventory",
-  supplier: "Inventory",
-  purchase: "Inventory",
-  sale: "POS",
-  customer: "Customers",
-  ledger: "Customers",
-  employee: "Employees",
-  attendance: "Attendance",
-  salary: "Salaries",
-  expense: "Expenses",
-  setting: "Settings",
-  shop: "Subscription",
-};
-
-export function moduleFromAction(action: string, entity?: string | null) {
-  if (entity && MODULE_BY_ENTITY[entity]) return MODULE_BY_ENTITY[entity];
-  const prefix = action.split(".")[0];
-  if (prefix && MODULE_BY_ENTITY[prefix]) return MODULE_BY_ENTITY[prefix];
-  if (action.startsWith("auth.")) return "Auth";
-  return entity ? entity.charAt(0).toUpperCase() + entity.slice(1) : "System";
-}
 
 export async function logActivity(input: LogActivityInput) {
   try {

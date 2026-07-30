@@ -20,7 +20,7 @@ const shopSchema = new Schema(
     ownerPhone: { type: String, trim: true },
     plan: { type: String, enum: ["monthly", "yearly"], required: true },
     planAmount: { type: Number, required: true },
-    paymentMethod: { type: String, enum: ["easypaisa", "jazzcash", "bank"], required: true },
+    paymentMethod: { type: String, enum: ["easypaisa", "jazzcash", "bank", "stripe"], required: true },
     paymentReference: { type: String, required: true, trim: true, index: true },
     paymentStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "pending", index: true },
     status: { type: String, enum: ["pending", "active", "expired", "suspended", "rejected"], default: "pending", index: true },

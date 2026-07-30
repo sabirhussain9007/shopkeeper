@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { authOptions, refreshShopAccess } from "@/lib/auth";
 import { connectDb } from "@/lib/db";
 import { getRoleLandingPath } from "@/lib/access";
+import { shopPaymentMethodLabel } from "@/lib/saas";
 import { Shop } from "@/models";
 import { SuperAdminSignOut } from "@/features/saas/super-admin-signout";
 import { RenewShopForm } from "@/features/shop/renew-shop-form";
@@ -49,7 +50,8 @@ export default async function ShopStatusPage() {
           <p className="text-zinc-600">{message}</p>
           {shop?.plan && (
             <p className="text-sm text-zinc-500">
-              Plan: <span className="capitalize">{shop.plan}</span> · Rs. {shop.planAmount} · Payment: {shop.paymentMethod} ({shop.paymentReference})
+              Plan: <span className="capitalize">{shop.plan}</span> · Rs. {shop.planAmount} · Payment:{" "}
+              {shopPaymentMethodLabel(shop.paymentMethod)} ({shop.paymentReference})
             </p>
           )}
           <div className="flex flex-wrap gap-3 pt-2">

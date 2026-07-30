@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { NotificationCenter } from "@/components/saas/notification-center";
 import { TableLoader } from "@/components/ui/loader";
 import { cn, formatPakistanDate } from "@/lib/utils";
+import { shopPaymentMethodLabel } from "@/lib/saas";
 
 type ShopRow = {
   _id: string;
@@ -23,6 +24,7 @@ type ShopRow = {
   paymentMethod: string;
   paymentReference: string;
   paymentStatus: string;
+  gatewayTxnId?: string;
   status: string;
   startsAt?: string;
   expiresAt?: string;
@@ -59,7 +61,14 @@ export function SuperAdminShops() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [expiryFilter, setExpiryFilter] = useState("");
-  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject" | "suspend"; name: string } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    id: string;
+    action: "approve" | "reject" | "suspend";
+    name: string;
+    paymentMethod?: string;
+    paymentReference?: string;
+    planAmount?: number;
+  } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const statsQuery = useQuery({
@@ -134,7 +143,7 @@ export function SuperAdminShops() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shops..." className="max-w-xs" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shops, email, or TID..." className="max-w-xs" />
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -194,6 +203,7 @@ export function SuperAdminShops() {
               <th className="px-4 py-3">Shop Name</th>
               <th className="px-4 py-3">Owner</th>
               <th className="px-4 py-3">Current Plan</th>
+              <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3">Start Date</th>
               <th className="px-4 py-3">Expiry Date</th>
               <th className="px-4 py-3">Remaining Days</th>
@@ -203,10 +213,10 @@ export function SuperAdminShops() {
           </thead>
           <tbody>
             {loading ? (
-              <TableLoader colSpan={8} label="Loading shops..." />
+              <TableLoader colSpan={9} label="Loading shops..." />
             ) : shops.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                   No shops found.
                 </td>
               </tr>
@@ -227,6 +237,19 @@ export function SuperAdminShops() {
                     <td className="px-4 py-3">
                       <p className="capitalize">{shop.planLabel ?? shop.plan}</p>
                       <p className="text-xs text-zinc-500">Rs. {shop.planAmount}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-zinc-900">{shopPaymentMethodLabel(shop.paymentMethod)}</p>
+                      <p className="mt-1 font-mono text-xs text-zinc-600">
+                        {shop.paymentMethod === "stripe" && shop.gatewayTxnId
+                          ? shop.gatewayTxnId
+                          : shop.paymentReference || "—"}
+                      </p>
+                      {shop.paymentStatus === "pending" ? (
+                        <span className="mt-2 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                          Awaiting verification
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-600">{formatDate(shop.startsAt)}</td>
                     <td className="px-4 py-3 text-xs text-zinc-600">{formatDate(shop.expiresAt)}</td>
@@ -252,7 +275,19 @@ export function SuperAdminShops() {
                       <div className="flex flex-col gap-2">
                         {shop.status === "pending" && (
                           <>
-                            <Button size="sm" onClick={() => setConfirm({ id: shop._id, action: "approve", name: shop.name })}>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                setConfirm({
+                                  id: shop._id,
+                                  action: "approve",
+                                  name: shop.name,
+                                  paymentMethod: shop.paymentMethod,
+                                  paymentReference: shop.paymentReference,
+                                  planAmount: shop.planAmount,
+                                })
+                              }
+                            >
                               Approve
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => setConfirm({ id: shop._id, action: "reject", name: shop.name })}>
@@ -285,7 +320,9 @@ export function SuperAdminShops() {
         title={confirm ? `${confirm.action} ${confirm.name}?` : ""}
         description={
           confirm?.action === "approve"
-            ? "This will verify payment and activate the shop for the selected plan duration."
+            ? confirm.paymentMethod && confirm.paymentReference
+              ? `Verify Rs. ${confirm.planAmount ?? "—"} received via ${shopPaymentMethodLabel(confirm.paymentMethod)} (ref: ${confirm.paymentReference}) and activate this shop for the selected plan.`
+              : "This will verify payment and activate the shop for the selected plan duration."
             : confirm?.action === "reject"
               ? "The shop will be marked rejected and the owner cannot use the system."
               : "The shop will be suspended until reactivated."

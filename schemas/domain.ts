@@ -89,12 +89,27 @@ export const createShopSchema = z
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
     plan: z.enum(["monthly", "yearly"]),
-    paymentMethod: z.enum(["bank"]),
-    paymentReference: z.string().min(3).max(120),
+    paymentMethod: z.enum(["bank", "easypaisa", "jazzcash", "stripe"]),
+    paymentReference: z.string().max(120).optional().default(""),
+    payOnline: z.boolean().optional().default(false),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentMethod === "stripe") return;
+    if (data.payOnline && (data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash")) return;
+    if (
+      (data.paymentMethod === "bank" || data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash") &&
+      data.paymentReference.trim().length < 3
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter your payment receipt / transaction ID.",
+        path: ["paymentReference"],
+      });
+    }
   });
 
 export const categorySchema = z.object({

@@ -19,7 +19,25 @@ export const SHOP_PLANS = {
 } as const;
 
 export type ShopPlanId = keyof typeof SHOP_PLANS;
-export type ShopPaymentMethod = "bank";
+export type ManualShopPaymentMethod = "bank" | "easypaisa" | "jazzcash";
+export type ShopPaymentMethod = ManualShopPaymentMethod | "stripe";
+
+export const MANUAL_SHOP_PAYMENT_METHODS: ManualShopPaymentMethod[] = ["easypaisa", "jazzcash", "bank"];
+
+const SHOP_PAYMENT_METHOD_LABELS: Record<ShopPaymentMethod, string> = {
+  bank: "Bank Transfer",
+  easypaisa: "EasyPaisa",
+  jazzcash: "JazzCash",
+  stripe: "Stripe",
+};
+
+export function shopPaymentMethodLabel(method: string) {
+  return SHOP_PAYMENT_METHOD_LABELS[method as ShopPaymentMethod] ?? method;
+}
+
+export function isManualShopPaymentMethod(method: string): method is ManualShopPaymentMethod {
+  return MANUAL_SHOP_PAYMENT_METHODS.includes(method as ManualShopPaymentMethod);
+}
 export type ShopStatus = "pending" | "active" | "expired" | "suspended" | "rejected";
 export type ShopPaymentStatus = "pending" | "approved" | "rejected";
 

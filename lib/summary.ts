@@ -138,7 +138,9 @@ export async function getDashboardSummary(shopId: string) {
       _id: String(item._id),
       action: item.action,
       description: item.description,
+      module: (item as { module?: string }).module ?? "",
       userName: item.userName ?? "",
+      userRole: (item as { userRole?: string }).userRole ?? "",
       createdAt: (item as { createdAt?: Date }).createdAt?.toISOString?.() ?? "",
     })),
     lowStock: lowStock.map((p) => ({
