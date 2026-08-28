@@ -108,14 +108,9 @@ export function PosTerminal() {
   const [cashCustomerName, setCashCustomerName] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentReferenceError, setPaymentReferenceError] = useState<string | null>(null);
-  const [paymentSelection, setPaymentSelection] = useState("cash");
-  const [selectedAccountName, setSelectedAccountName] = useState("");
+  const [paymentSelectionChoice, setPaymentSelection] = useState("cash");
   const [chequeNumber, setChequeNumber] = useState("");
   const [chequeBankAccountIdSelection, setChequeBankAccountId] = useState("");
-  // Defaulting to the first loaded account is derived during render rather than
-  // synced in by an effect: setting state from an effect just to mirror data the
-  // component already has forces a second render pass (react-hooks/set-state-in-effect).
-  const chequeBankAccountId = chequeBankAccountIdSelection || bankAccounts[0]?._id || "";
   const [chequeDate, setChequeDate] = useState(() => pakistanTodayKey());
   const [orderNotes, setOrderNotes] = useState("");
   const [pointsRedeemed, setPointsRedeemed] = useState(0);
@@ -128,10 +123,32 @@ export function PosTerminal() {
 
   const paymentAccounts = paymentAccountsQuery.data?.items ?? [];
   const bankAccounts = bankAccountsQuery.data?.items ?? [];
+  // Defaulting to the first loaded account is derived during render rather than
+  // synced in by an effect: setting state from an effect just to mirror data the
+  // component already has forces a second render pass (react-hooks/set-state-in-effect).
+  const chequeBankAccountId = chequeBankAccountIdSelection || bankAccounts[0]?._id || "";
+  // The selection shown is reconciled against the loaded accounts and the store's
+  // payment method as a derivation, not by writing it back through an effect. Only
+  // the store correction it implies is a real side effect (see the effect below).
+  const paymentSelection = useMemo(() => {
+    if (paymentAccountsQuery.isLoading) return paymentSelectionChoice;
+    if (isAccountPaymentValue(paymentSelectionChoice)) {
+      const resolved = resolvePaymentSelection(paymentSelectionChoice, paymentAccounts);
+      return resolved.isAccount || paymentSelectionChoice === "cash" ? paymentSelectionChoice : "cash";
+    }
+    if (pos.paymentMethod === "card" || paymentSelectionChoice === "card") return "cash";
+    if (isShopAccountPaymentMethod(pos.paymentMethod)) {
+      return findAccountPaymentValue(paymentAccounts, pos.paymentMethod) ?? "cash";
+    }
+    return pos.paymentMethod;
+  }, [paymentAccounts, paymentAccountsQuery.isLoading, paymentSelectionChoice, pos.paymentMethod]);
+
   const resolvedPayment = useMemo(
     () => resolvePaymentSelection(paymentSelection, paymentAccounts),
     [paymentSelection, paymentAccounts],
   );
+  // applyPaymentSelection only ever stored resolvePaymentSelection(...).bankName here.
+  const selectedAccountName = resolvedPayment.bankName;
   const chequeBankName = useMemo(
     () => bankAccounts.find((account) => account._id === chequeBankAccountId)?.name ?? "",
     [bankAccounts, chequeBankAccountId],
@@ -272,7 +289,6 @@ export function PosTerminal() {
     setPaymentReference("");
     setPaymentReferenceError(null);
     setPaymentSelection("cash");
-    setSelectedAccountName("");
     setChequeNumber("");
     setChequeBankAccountId("");
     setChequeDate(pakistanTodayKey());
@@ -285,7 +301,6 @@ export function PosTerminal() {
       setPaymentSelection(value);
       const resolved = resolvePaymentSelection(value, paymentAccounts);
       pos.setPaymentMethod(resolved.paymentMethod as PaymentMethod);
-      setSelectedAccountName(resolved.bankName);
       setPaymentReference("");
       setPaymentReferenceError(null);
 
@@ -310,37 +325,10 @@ export function PosTerminal() {
 
   useEffect(() => {
     if (paymentAccountsQuery.isLoading) return;
-    if (isAccountPaymentValue(paymentSelection)) {
-      const resolved = resolvePaymentSelection(paymentSelection, paymentAccounts);
-      if (!resolved.isAccount && paymentSelection !== "cash") {
-        setPaymentSelection("cash");
-        pos.setPaymentMethod("cash");
-        setSelectedAccountName("");
-      }
-      return;
+    if (resolvedPayment.paymentMethod !== pos.paymentMethod) {
+      pos.setPaymentMethod(resolvedPayment.paymentMethod as PaymentMethod);
     }
-    if (pos.paymentMethod === "card" || paymentSelection === "card") {
-      setPaymentSelection("cash");
-      pos.setPaymentMethod("cash");
-      setSelectedAccountName("");
-      return;
-    }
-    if (isShopAccountPaymentMethod(pos.paymentMethod)) {
-      const match = findAccountPaymentValue(paymentAccounts, pos.paymentMethod);
-      if (match) {
-        setPaymentSelection(match);
-        const resolved = resolvePaymentSelection(match, paymentAccounts);
-        setSelectedAccountName(resolved.bankName);
-      } else {
-        setPaymentSelection("cash");
-        pos.setPaymentMethod("cash");
-        setSelectedAccountName("");
-      }
-    } else {
-      setPaymentSelection(pos.paymentMethod);
-      setSelectedAccountName("");
-    }
-  }, [paymentAccounts, paymentAccountsQuery.isLoading, paymentSelection, pos, pos.paymentMethod]);
+  }, [paymentAccountsQuery.isLoading, pos, pos.paymentMethod, resolvedPayment.paymentMethod]);
 
   const cashReceiptCustomerName = cashCustomerName.trim() || "Walk-in customer";
 

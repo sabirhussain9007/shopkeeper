@@ -298,64 +298,62 @@ export function PurchasesManager({ variant = "order" }: { variant?: "order" | "s
 
   const receiveAmountDue = Math.max(receiveTotals.grandTotal - receiveAdvancePaid, 0);
 
-  useEffect(() => {
+  // These form defaults are applied while rendering rather than in an effect. An
+  // effect would paint one frame with the stale value first, and React flags
+  // setState-in-effect for exactly this "mirror data we already have" shape.
+  const [receivePayNowBasis, setReceivePayNowBasis] = useState(receiveAmountDue);
+  if (receivePayNowBasis !== receiveAmountDue) {
+    setReceivePayNowBasis(receiveAmountDue);
     setReceivePayNow(receiveAmountDue);
-  }, [receiveAmountDue]);
+  }
 
-  useEffect(() => {
-    if (!createOpen || paymentMethod !== "cheque" || activeBankAccounts.length === 0) return;
-    if (pendingEditBankName) return;
+  if (createOpen && paymentMethod === "cheque" && activeBankAccounts.length > 0 && !pendingEditBankName) {
     if (!chequeBankAccountId || !activeBankAccounts.some((account) => account._id === chequeBankAccountId)) {
       if (!editingId) setChequeBankAccountId(activeBankAccounts[0]._id);
     }
-  }, [activeBankAccounts, chequeBankAccountId, createOpen, paymentMethod, pendingEditBankName, editingId]);
+  }
 
-  useEffect(() => {
-    if (!pendingEditBankName || activeBankAccounts.length === 0) return;
+  if (pendingEditBankName && activeBankAccounts.length > 0) {
     const bank = activeBankAccounts.find((account) => account.name === pendingEditBankName);
     if (bank) {
       setChequeBankAccountId(bank._id);
       setPendingEditBankName("");
     }
-  }, [activeBankAccounts, pendingEditBankName]);
+  }
 
-  useEffect(() => {
-    if (!pendingEditWalletBankName || walletAccounts.length === 0) return;
+  if (pendingEditWalletBankName && walletAccounts.length > 0) {
     const account = walletAccounts.find((item) => item.name === pendingEditWalletBankName);
     if (account) {
       setWalletAccountId(account._id);
       setPendingEditWalletBankName("");
     }
-  }, [pendingEditWalletBankName, walletAccounts]);
+  }
 
-  useEffect(() => {
-    if (!createOpen || !isWalletPayment || walletAccounts.length === 0) return;
-    if (pendingEditWalletBankName) return;
+  if (createOpen && isWalletPayment && walletAccounts.length > 0 && !pendingEditWalletBankName) {
     if (!walletAccountId || !walletAccounts.some((account) => account._id === walletAccountId)) {
       if (!editingId) setWalletAccountId(walletAccounts[0]._id);
     }
-  }, [createOpen, editingId, isWalletPayment, pendingEditWalletBankName, walletAccountId, walletAccounts]);
+  }
 
-  useEffect(() => {
-    if (!createOpen || !isWalletPayment || grandTotal <= 0) return;
+  if (createOpen && isWalletPayment && grandTotal > 0) {
     setPaidAmount((current) => (current <= 0 ? grandTotal : current));
-  }, [createOpen, grandTotal, isWalletPayment]);
+  }
 
-  useEffect(() => {
-    if (!createOpen || paymentMethod !== "cheque" || grandTotal <= 0) return;
+  if (createOpen && paymentMethod === "cheque" && grandTotal > 0) {
     setPaidAmount((current) => (current <= 0 ? grandTotal : current));
-  }, [createOpen, grandTotal, paymentMethod]);
+  }
 
-  useEffect(() => {
-    if (!receiveOpen || receivePaymentMethod !== "cheque" || activeBankAccounts.length === 0) return;
-    if (receiveChequeBankAccountId && activeBankAccounts.some((account) => account._id === receiveChequeBankAccountId)) {
-      return;
-    }
+  if (
+    receiveOpen &&
+    receivePaymentMethod === "cheque" &&
+    activeBankAccounts.length > 0 &&
+    !(receiveChequeBankAccountId && activeBankAccounts.some((account) => account._id === receiveChequeBankAccountId))
+  ) {
     const matchedAccount = receiveSavedBankName
       ? activeBankAccounts.find((account) => account.name === receiveSavedBankName)
       : undefined;
     setReceiveChequeBankAccountId(matchedAccount?._id ?? activeBankAccounts[0]._id);
-  }, [activeBankAccounts, receiveChequeBankAccountId, receiveOpen, receivePaymentMethod, receiveSavedBankName]);
+  }
 
   useEffect(() => {
     if (!createOpen) return;
