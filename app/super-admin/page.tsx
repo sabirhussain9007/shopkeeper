@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -6,6 +7,14 @@ import { authOptions } from "@/lib/auth";
 import { SuperAdminShops } from "@/features/saas/super-admin-shops";
 import { SuperAdminSignOut } from "@/features/saas/super-admin-signout";
 import { AppPanel, PageBackground } from "@/components/layout/page-background";
+
+export const metadata: Metadata = {
+  title: "Super admin",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function SuperAdminPage() {
   const session = await getServerSession(authOptions);

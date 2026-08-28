@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
@@ -10,6 +11,14 @@ import { SuperAdminSignOut } from "@/features/saas/super-admin-signout";
 import { RenewShopForm } from "@/features/shop/renew-shop-form";
 import { PageBackground } from "@/components/layout/page-background";
 import type { Role } from "@/types";
+
+export const metadata: Metadata = {
+  title: "Shop status",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function ShopStatusPage() {
   const session = await getServerSession(authOptions);

@@ -91,6 +91,7 @@ type SaleDetail = {
     status: string;
     subtotal?: number;
     discountValue?: number;
+    discountTotal?: number;
     taxTotal?: number;
     grandTotal: number;
     paidAmount?: number;
@@ -440,7 +441,7 @@ export function SummaryDashboard({ summary }: { summary: Summary }) {
             customerName={selectedInvoice.sale.customer?.name}
             items={selectedInvoice.items}
             subtotal={selectedInvoice.sale.subtotal ?? 0}
-            discount={selectedInvoice.sale.discountValue ?? 0}
+            discount={selectedInvoice.sale.discountTotal ?? selectedInvoice.sale.discountValue ?? 0}
             tax={selectedInvoice.sale.taxTotal ?? 0}
             grandTotal={selectedInvoice.sale.grandTotal}
             paidAmount={selectedInvoice.sale.paidAmount ?? 0}

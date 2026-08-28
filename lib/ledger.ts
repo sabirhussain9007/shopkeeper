@@ -108,7 +108,7 @@ export async function getCustomerLedger(customerId: string, shopId: string) {
   if (!customer) return null;
   const entries = await LedgerEntry.find(withShopFilter(shopId, { customer: customerId, deletedAt: { $exists: false } }))
     .sort({ entryDate: -1 })
-    .populate("sale", "invoiceNumber status paymentMethod subtotal discountValue taxTotal grandTotal paidAmount")
+    .populate("sale", "invoiceNumber status paymentMethod saleType subtotal discountValue discountTotal taxTotal grandTotal paidAmount")
     .lean();
   return {
     customer,
@@ -118,8 +118,10 @@ export async function getCustomerLedger(customerId: string, shopId: string) {
         invoiceNumber?: string;
         status?: string;
         paymentMethod?: string;
+        saleType?: string;
         subtotal?: number;
         discountValue?: number;
+        discountTotal?: number;
         taxTotal?: number;
         grandTotal?: number;
         paidAmount?: number;
@@ -133,8 +135,10 @@ export async function getCustomerLedger(customerId: string, shopId: string) {
               invoiceNumber: sale.invoiceNumber,
               status: sale.status,
               paymentMethod: sale.paymentMethod,
+              saleType: sale.saleType,
               subtotal: sale.subtotal,
               discountValue: sale.discountValue,
+              discountTotal: sale.discountTotal,
               taxTotal: sale.taxTotal,
               grandTotal: sale.grandTotal,
               paidAmount: sale.paidAmount,

@@ -40,6 +40,7 @@ import { BlockLoader } from "@/components/ui/loader";
 import { currency, formatPakistanDate, formatPakistanDateInput, formatPakistanDateTime, formatPakistanTime, pakistanTodayKey } from "@/lib/utils";
 import { usePosStore, usePosStoreRehydration } from "@/store/pos-store";
 import type { CartItem, PaymentMethod } from "@/types";
+import { unitPriceFor } from "@/lib/pricing";
 import { isCreditPayment, requiresFullPayment } from "@/types";
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
@@ -91,7 +92,6 @@ export function PosTerminal() {
   const { data: session } = useSession();
   usePosStoreRehydration();
   const pos = usePosStore();
-  const computed = pos.computed();
   const searchRef = useRef<HTMLInputElement>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -135,11 +135,15 @@ export function PosTerminal() {
 
   const customers = customersQuery.data?.items ?? [];
   const selectedCustomer = customers.find((c) => c._id === pos.customerId);
-  const groupDiscountAmount =
-    selectedCustomer && "groupDiscountPercent" in selectedCustomer && selectedCustomer.groupDiscountPercent
-      ? Math.round((computed.subtotal - computed.discount) * (Number(selectedCustomer.groupDiscountPercent) / 100))
+  const groupDiscountPercent =
+    selectedCustomer && "groupDiscountPercent" in selectedCustomer
+      ? Number(selectedCustomer.groupDiscountPercent) || 0
       : 0;
-  const grandTotal = Math.max(computed.grandTotal - groupDiscountAmount - pointsRedeemed, 0);
+  // Every figure on screen comes from the same helper the server re-runs at
+  // checkout, so what the cashier sees is what the sale is allowed to be.
+  const computed = pos.computed({ groupDiscountPercent, pointsRedeemed });
+  const groupDiscountAmount = computed.groupDiscount;
+  const grandTotal = computed.grandTotal;
   const settings = settingsQuery.data ?? {
     businessName: "Shopkeeper",
     logo: "",
@@ -177,36 +181,65 @@ export function PosTerminal() {
     return () => window.clearTimeout(timer);
   }, [receiptSnapshot, settings.autoPrintReceipt, printReceipt]);
 
+  const couponBase = computed.couponBase;
+  const setCoupon = pos.setCoupon;
+
   const applyCoupon = useCallback(async () => {
     const code = couponInput.trim();
     if (!code) {
-      pos.setCoupon(undefined, 0);
+      setCoupon(undefined, 0);
       return;
     }
     setCouponPending(true);
     try {
-      const subtotal = pos.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-      const orderDiscount = pos.discountType === "percentage" ? (subtotal * pos.discountValue) / 100 : pos.discountValue;
-      const baseTotal = subtotal - orderDiscount + pos.items.reduce((sum, item) => {
-        const base = Math.max(item.quantity * item.unitPrice - item.discount, 0);
-        return sum + (base * item.taxRate) / 100;
-      }, 0);
       const response = await fetch("/api/coupons/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, orderTotal: baseTotal }),
+        body: JSON.stringify({ code, orderTotal: couponBase }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Invalid coupon");
-      pos.setCoupon(data.code, data.discount);
+      setCoupon(data.code, data.discount);
       toast.success(`Coupon applied — ${currency(data.discount)} off`);
     } catch (error) {
-      pos.setCoupon(undefined, 0);
+      setCoupon(undefined, 0);
       toast.error(error instanceof Error ? error.message : "Coupon failed");
     } finally {
       setCouponPending(false);
     }
-  }, [couponInput, pos]);
+  }, [couponInput, couponBase, setCoupon]);
+
+  // A coupon is worth a percentage of the cart, so editing the cart after
+  // applying one leaves the discount stale. Checkout rejects stale coupons,
+  // so re-price the applied coupon whenever its base moves.
+  const appliedCouponCode = pos.couponCode;
+  useEffect(() => {
+    if (!appliedCouponCode) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/coupons/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: appliedCouponCode, orderTotal: couponBase }),
+        });
+        const data = await response.json();
+        if (cancelled) return;
+        if (!response.ok) {
+          setCoupon(undefined, 0);
+          toast.error(data.error ?? "Coupon no longer applies to this cart.");
+          return;
+        }
+        setCoupon(data.code, data.discount);
+      } catch {
+        // Network hiccup: leave the coupon as-is. Checkout re-validates anyway.
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [appliedCouponCode, couponBase, setCoupon]);
 
   const addProductByCode = useCallback(
     (code: string) => {
@@ -222,7 +255,7 @@ export function PosTerminal() {
         toast.error(`${product.productName} is out of stock.`);
         return;
       }
-      pos.addItem(productToCartItem(product));
+      pos.addItem(productToCartItem(product, pos.saleType));
       toast.success(`Added ${product.productName}`);
     },
     [products, pos],
@@ -355,7 +388,7 @@ export function PosTerminal() {
 
       const requestedQuantity = Number(cartQuantities[product._id] ?? 1);
       const quantity = Math.max(1, Math.min(Math.trunc(requestedQuantity) || 1, product.quantity));
-      pos.addItem({ ...productToCartItem(product), quantity });
+      pos.addItem({ ...productToCartItem(product, pos.saleType), quantity });
       toast.success(`Added ${quantity} x ${product.productName}`);
     },
     [cartQuantities, pos],
@@ -436,6 +469,7 @@ export function PosTerminal() {
       const payload = buildSalePayload({
         invoiceNumber,
         customerId: walkInSale ? undefined : pos.customerId,
+        saleType: pos.saleType,
         items: pos.items,
         discountType: pos.discountType,
         discountValue: pos.discountValue,
@@ -451,7 +485,7 @@ export function PosTerminal() {
             ? chequeBankName.trim()
             : resolvedPayment.bankName || selectedAccountName.trim() || undefined,
         chequeDate: pos.paymentMethod === "cheque" ? chequeDate : undefined,
-        groupDiscount: groupDiscountAmount,
+        groupDiscountPercent,
         pointsRedeemed,
       });
 
@@ -495,7 +529,7 @@ export function PosTerminal() {
     } finally {
       setCheckoutPending(false);
     }
-  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery, cashReceiptCustomerName, voidOrder, walkInSale, orderNotes, paymentReference, needsPaymentReference, needsWalletLastFourDigits, changeDue, grandTotal, groupDiscountAmount, pointsRedeemed, chequeNumber, chequeBankName, chequeDate, resolvedPayment, selectedAccountName]);
+  }, [pos, computed, selectedCustomer, creditDue, creditExceeded, customersQuery, cashReceiptCustomerName, voidOrder, walkInSale, orderNotes, paymentReference, needsPaymentReference, needsWalletLastFourDigits, changeDue, grandTotal, groupDiscountPercent, pointsRedeemed, chequeNumber, chequeBankName, chequeDate, resolvedPayment, selectedAccountName]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -568,6 +602,25 @@ export function PosTerminal() {
             </Button>
           </div>
 
+          <label
+            htmlFor="pos-wholesale"
+            className="flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+          >
+            <input
+              id="pos-wholesale"
+              type="checkbox"
+              className="h-4 w-4 accent-emerald-600"
+              checked={pos.saleType === "wholesale"}
+              onChange={(event) => pos.setSaleType(event.target.checked ? "wholesale" : "retail")}
+            />
+            <span className="font-medium">Wholesale pricing</span>
+            <span className="text-zinc-500 dark:text-zinc-400">
+              {pos.saleType === "wholesale"
+                ? "Charging wholesale rates for this sale."
+                : "Charging retail rates for this sale."}
+            </span>
+          </label>
+
           <div className="rounded-2xl border border-zinc-200 bg-white">
             {isLoading ? (
               <BlockLoader label="Loading products..." />
@@ -591,7 +644,7 @@ export function PosTerminal() {
                       <tr key={product._id} className="transition hover:bg-emerald-50/60">
                         <td className="whitespace-nowrap px-4 py-3 font-medium">{product.productName}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{product.sku}</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-600 dark:text-emerald-400">{currency(product.sellingPrice)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-600 dark:text-emerald-400">{currency(unitPriceFor(product, pos.saleType))}</td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <Badge variant={product.quantity <= product.reorderLevel ? "warning" : "default"}>Qty {product.quantity}</Badge>
                         </td>
@@ -743,7 +796,7 @@ export function PosTerminal() {
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-600">Discount</span>
-              <span className="font-medium text-zinc-950">{currency(computed.discount)}</span>
+              <span className="font-medium text-zinc-950">{currency(computed.itemDiscount + computed.orderDiscount)}</span>
             </div>
             {pos.couponDiscount > 0 ? (
               <div className="flex justify-between text-emerald-700">

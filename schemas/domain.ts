@@ -155,6 +155,7 @@ export const productSchema = z.object({
   purchasePrice: money,
   costPrice: money.default(0),
   sellingPrice: money,
+  wholesalePrice: money.default(0),
   taxRate: z.coerce.number().min(0).max(100).default(0),
   quantity: z.coerce.number().min(0).default(0),
   reorderLevel: z.coerce.number().min(0).default(5),
@@ -201,10 +202,12 @@ export const saleSchema = z.object({
   invoiceNumber: z.string().min(3),
   customer: objectId.optional(),
   cashier: objectId.optional(),
+  saleType: z.enum(["retail", "wholesale"]).default("retail"),
   items: z.array(saleItemSchema).min(1),
   subtotal: money,
   discountType: z.enum(["flat", "percentage"]).default("flat"),
   discountValue: money.default(0),
+  couponDiscount: money.default(0),
   taxTotal: money.default(0),
   grandTotal: money,
   paidAmount: money.default(0),
@@ -219,6 +222,9 @@ export const saleSchema = z.object({
   bankName: z.string().max(120).optional().default(""),
   chequeDate: z.coerce.date().optional().nullable(),
 }).superRefine((data, ctx) => {
+  if (data.discountType === "percentage" && data.discountValue > 100) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Percentage discount cannot exceed 100.", path: ["discountValue"] });
+  }
   if ((data.paymentMethod === "bank" || data.paymentMethod === "easypaisa" || data.paymentMethod === "jazzcash") && !data.bankName?.trim()) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a registered payment account.", path: ["bankName"] });
   }

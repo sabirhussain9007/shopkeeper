@@ -1,6 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PageBackground } from "@/components/layout/page-background";
 import { ResetPasswordForm } from "@/features/auth/reset-password-form";
+
+export const metadata: Metadata = {
+  title: "Reset password",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function ResetPasswordPage() {
   return (

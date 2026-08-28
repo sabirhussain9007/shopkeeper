@@ -1,6 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PageBackground } from "@/components/layout/page-background";
 import { LoginForm } from "@/features/auth/login-form";
+
+export const metadata: Metadata = {
+  title: "Login",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function LoginPage() {
   return (

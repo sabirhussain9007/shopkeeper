@@ -15,7 +15,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { useCrud } from "@/hooks/use-crud";
 import { currency, formatPakistanDate, formatPakistanDateInput, formatPakistanDateTime, parsePakistanDateInput, resolvePakistanEntryDate } from "@/lib/utils";
 import { saleChequeBounceSchema } from "@/schemas/domain";
@@ -24,7 +23,7 @@ import { PaymentAccountSelect, PaymentMethodAccountSelect } from "@/components/p
 import { useShopPaymentAccounts } from "@/hooks/use-shop-payment-accounts";
 import { paymentSelectionLabel, resolvePaymentSelection, STANDARD_BASE_PAYMENT_METHODS } from "@/lib/payment-accounts";
 
-type Sale = SaleInput & { _id: string; createdAt?: string };
+type Sale = SaleInput & { _id: string; createdAt?: string; discountTotal?: number; orderDiscount?: number };
 type SaleItem = { _id: string; name: string; sku?: string; quantity: number; unitPrice: number; lineTotal: number };
 type BusinessSettings = { businessName: string; logo: string; address: string; phone: string; email: string; gstVatNumber: string; ntn: string };
 type RepayPaymentMethod = "cash" | "cheque" | "bank" | "card";
@@ -506,7 +505,7 @@ export function SalesManager() {
             customerName={detail.sale.customer?.name}
             items={detail.items}
             subtotal={detail.sale.subtotal ?? 0}
-            discount={detail.sale.discountValue ?? 0}
+            discount={detail.sale.discountTotal ?? detail.sale.discountValue ?? 0}
             tax={detail.sale.taxTotal ?? 0}
             grandTotal={detail.sale.grandTotal}
             paymentMethod={detail.sale.paymentMethod}

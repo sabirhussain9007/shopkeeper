@@ -1,6 +1,7 @@
-import type { CartItem, PaymentMethod } from "@/types";
+import type { CartItem, PaymentMethod, SaleType } from "@/types";
 import { requiresFullPayment } from "@/types";
-import { createInvoiceNumber, totals } from "@/lib/utils";
+import { createInvoiceNumber } from "@/lib/utils";
+import { computeSaleTotals, lineTotalFor, unitPriceFor } from "@/lib/pricing";
 
 const PAYMENT_REFERENCE_MAX = 120;
 
@@ -34,6 +35,7 @@ export function normalizePaymentReference(value: string) {
 type BuildSaleParams = {
   invoiceNumber: string;
   customerId?: string;
+  saleType: SaleType;
   items: CartItem[];
   discountType: "flat" | "percentage";
   discountValue: number;
@@ -46,35 +48,33 @@ type BuildSaleParams = {
   chequeNumber?: string;
   bankName?: string;
   chequeDate?: string | Date | null;
-  groupDiscount?: number;
+  groupDiscountPercent?: number;
   pointsRedeemed?: number;
 };
 
-function lineTotal(item: CartItem) {
-  const base = Math.max(item.quantity * item.unitPrice - item.discount, 0);
-  return base + (base * item.taxRate) / 100;
-}
-
 export function buildSalePayload(params: BuildSaleParams) {
-  const subtotal = params.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  const orderDiscount = params.discountType === "percentage" ? (subtotal * params.discountValue) / 100 : params.discountValue;
-  const computed = totals(params.items, orderDiscount);
-  const couponDiscount = params.couponDiscount ?? 0;
-  const groupDiscount = params.groupDiscount ?? 0;
-  const pointsRedeemed = params.pointsRedeemed ?? 0;
-  const grandTotal = Math.max(computed.grandTotal - couponDiscount - groupDiscount - pointsRedeemed, 0);
+  const computed = computeSaleTotals({
+    items: params.items,
+    discountType: params.discountType,
+    discountValue: params.discountValue,
+    couponDiscount: params.couponDiscount ?? 0,
+    groupDiscountPercent: params.groupDiscountPercent ?? 0,
+    pointsRedeemed: params.pointsRedeemed ?? 0,
+  });
+  const { grandTotal } = computed;
   const paidAmount = params.paymentMethod === "credit" ? 0 : requiresFullPayment(params.paymentMethod) ? grandTotal : params.paidAmount;
   const noteParts = [
     params.orderNotes?.trim(),
     params.paymentReference?.trim() ? `Ref: ${normalizePaymentReference(params.paymentReference)}` : "",
     params.couponCode ? `Coupon: ${params.couponCode}` : "",
-    groupDiscount > 0 ? `Group discount: ${groupDiscount}` : "",
-    pointsRedeemed > 0 ? `Points redeemed: ${pointsRedeemed}` : "",
+    computed.groupDiscount > 0 ? `Group discount: ${computed.groupDiscount}` : "",
+    computed.pointsRedeemed > 0 ? `Points redeemed: ${computed.pointsRedeemed}` : "",
   ].filter(Boolean);
 
   return {
     invoiceNumber: params.invoiceNumber,
     customer: params.customerId,
+    saleType: params.saleType,
     items: params.items.map((item) => ({
       product: item.productId,
       name: item.name,
@@ -84,12 +84,17 @@ export function buildSalePayload(params: BuildSaleParams) {
       purchasePrice: item.purchasePrice,
       taxRate: item.taxRate,
       discount: item.discount,
-      lineTotal: lineTotal(item),
+      lineTotal: lineTotalFor(item),
     })),
     subtotal: computed.subtotal,
     discountType: params.discountType,
-    discountValue: params.discountValue + couponDiscount + groupDiscount + pointsRedeemed,
-    taxTotal: computed.tax,
+    // The manual order discount only. Coupon, group, and points ride in their
+    // own fields so nothing mixes a percentage with rupee amounts.
+    discountValue: params.discountValue,
+    couponDiscount: computed.couponDiscount,
+    groupDiscount: computed.groupDiscount,
+    pointsRedeemed: computed.pointsRedeemed,
+    taxTotal: computed.taxTotal,
     grandTotal,
     paidAmount,
     changeDue: Math.max(paidAmount - grandTotal, 0),
@@ -97,8 +102,6 @@ export function buildSalePayload(params: BuildSaleParams) {
     status: "completed" as const,
     notes: noteParts.join(" · ") || "",
     couponCode: params.couponCode ?? "",
-    pointsRedeemed,
-    groupDiscount,
     chequeNumber: params.paymentMethod === "cheque" ? params.chequeNumber?.trim() ?? "" : "",
     bankName: ["cheque", "bank", "easypaisa", "jazzcash"].includes(params.paymentMethod)
       ? params.bankName?.trim() ?? ""
@@ -107,23 +110,29 @@ export function buildSalePayload(params: BuildSaleParams) {
   };
 }
 
-export function productToCartItem(product: {
-  _id: string;
-  productName: string;
-  sku: string;
-  barcode?: string;
-  sellingPrice: number;
-  purchasePrice: number;
-  taxRate: number;
-  quantity: number;
-}): CartItem {
+export function productToCartItem(
+  product: {
+    _id: string;
+    productName: string;
+    sku: string;
+    barcode?: string;
+    sellingPrice: number;
+    wholesalePrice?: number;
+    purchasePrice: number;
+    taxRate: number;
+    quantity: number;
+  },
+  saleType: SaleType = "retail",
+): CartItem {
   return {
     productId: product._id,
     name: product.productName,
     sku: product.sku,
     barcode: product.barcode,
     quantity: 1,
-    unitPrice: product.sellingPrice,
+    unitPrice: unitPriceFor(product, saleType),
+    sellingPrice: product.sellingPrice,
+    wholesalePrice: product.wholesalePrice ?? 0,
     purchasePrice: product.purchasePrice,
     taxRate: product.taxRate,
     discount: 0,

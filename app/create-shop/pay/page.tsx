@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CreateShopPayContent } from "@/features/saas/create-shop-pay-content";
+
+export const metadata: Metadata = {
+  title: "Checkout",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function CreateShopPayPage() {
   return (

@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CreateShopSuccessContent } from "@/features/saas/create-shop-success-content";
+
+export const metadata: Metadata = {
+  title: "Shop created",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function CreateShopSuccessPage() {
   return (

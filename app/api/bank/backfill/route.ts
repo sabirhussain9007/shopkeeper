@@ -1,8 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { backfillBankTransactions } from "@/lib/bank-backfill";
 import { requireApiPermission } from "@/lib/rbac";
 
-export async function POST(_: NextRequest) {
+export async function POST() {
   const allowed = await requireApiPermission("reports:read");
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: allowed.status });
 

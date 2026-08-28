@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { ForgotPasswordForm } from "@/features/auth/forgot-password-form";
 import { PageBackground } from "@/components/layout/page-background";
+
+export const metadata: Metadata = {
+  title: "Forgot password",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function ForgotPasswordPage() {
   return (

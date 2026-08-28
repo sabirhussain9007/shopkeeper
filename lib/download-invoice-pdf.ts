@@ -18,6 +18,7 @@ type SaleDetail = {
     status: string;
     subtotal?: number;
     discountValue?: number;
+    discountTotal?: number;
     taxTotal?: number;
     grandTotal: number;
     paidAmount?: number;
@@ -35,7 +36,7 @@ export async function downloadInvoicePdf(detail: SaleDetail, business: BusinessS
   const doc = new jsPDF();
   const invoiceDate = detail.sale.createdAt ? formatPakistanDateTime(detail.sale.createdAt, "") : "";
   const subtotal = detail.sale.subtotal ?? 0;
-  const discount = detail.sale.discountValue ?? 0;
+  const discount = detail.sale.discountTotal ?? detail.sale.discountValue ?? 0;
   const tax = detail.sale.taxTotal ?? 0;
 
   doc.setFontSize(18);

@@ -16,8 +16,19 @@ type UniqueFieldCheck = {
   caseInsensitive?: boolean;
 };
 
+/**
+ * Mongoose's `Model` is invariant in its document generic, so a concrete
+ * `Model<Brand>` is NOT assignable to `Model<unknown>` — every route that
+ * passed a real model failed to typecheck. These handlers only touch the
+ * document-shape agnostic query API (find/create/findOneAndUpdate/...), and
+ * the request body is validated by `schema` rather than by the model type,
+ * so accepting any model is both sound enough and necessary here.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyModel = Model<any>;
+
 type CrudConfig = {
-  model: Model<unknown>;
+  model: AnyModel;
   schema: z.ZodTypeAny;
   permission: Permission;
   searchFields: string[];
@@ -57,7 +68,7 @@ function duplicateConflictResponse(field: string, value: string, entity?: string
 }
 
 async function findUniqueConflict(
-  model: Model<unknown>,
+  model: AnyModel,
   shopId: string,
   fields: UniqueFieldCheck[],
   data: Record<string, unknown>,

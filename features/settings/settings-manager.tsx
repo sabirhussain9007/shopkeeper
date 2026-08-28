@@ -537,7 +537,7 @@ export function SettingsManager({ currentRole = "admin" }: { currentRole?: ShopR
             <div className="flex justify-center overflow-auto rounded-xl border border-zinc-200 bg-white p-4">
               <Receipt
                 items={[
-                  { productId: "1", name: "Sample Item", sku: "SKU-001", quantity: 2, unitPrice: 500, purchasePrice: 350, taxRate: Number(preview.taxRate) || 0, discount: 0, stockAvailable: 10 },
+                  { productId: "1", name: "Sample Item", sku: "SKU-001", quantity: 2, unitPrice: 500, sellingPrice: 500, wholesalePrice: 450, purchasePrice: 350, taxRate: Number(preview.taxRate) || 0, discount: 0, stockAvailable: 10 },
                 ]}
                 size={receiptSize}
                 invoiceNumber="000001"

@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { SaleType } from "@/lib/pricing";
 import type {
   accountingEntrySchema,
   attendanceSchema,
@@ -17,6 +18,8 @@ import type {
   userSchema,
   warehouseSchema,
 } from "@/schemas/domain";
+
+export type { SaleType };
 
 export const roles = ["super_admin", "admin", "manager", "cashier"] as const;
 export type Role = (typeof roles)[number];
@@ -107,7 +110,10 @@ export type CartItem = {
   sku: string;
   barcode?: string;
   quantity: number;
+  /** Price actually charged; mirrors sellingPrice or wholesalePrice per sale type. */
   unitPrice: number;
+  sellingPrice: number;
+  wholesalePrice: number;
   purchasePrice: number;
   taxRate: number;
   discount: number;
@@ -119,6 +125,7 @@ export type HeldOrder = {
   name: string;
   customerId?: string;
   items: CartItem[];
+  saleType: SaleType;
   discountType: "flat" | "percentage";
   discountValue: number;
   createdAt: string;

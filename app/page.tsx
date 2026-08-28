@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
@@ -6,7 +7,33 @@ import { PageBackground } from "@/components/layout/page-background";
 import { getRoleLandingPath } from "@/lib/access";
 import { authOptions } from "@/lib/auth";
 import { SHOP_PLANS } from "@/lib/saas";
+import { siteConfig, siteUrl } from "@/lib/site";
 import type { Role } from "@/types";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
+
+const softwareJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: siteConfig.name,
+  url: siteUrl,
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  description: siteConfig.description,
+  areaServed: "PK",
+  offers: [SHOP_PLANS.monthly, SHOP_PLANS.yearly].map((plan) => ({
+    "@type": "Offer",
+    name: plan.label,
+    price: plan.amount,
+    priceCurrency: "PKR",
+    description: plan.description,
+    url: `${siteUrl}/create-shop`,
+  })),
+};
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions);
@@ -14,6 +41,7 @@ export default async function LandingPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden text-[#f3f7f4]">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }} />
       <PageBackground />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8 md:px-10">

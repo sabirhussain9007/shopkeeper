@@ -3,12 +3,14 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { CartItem, HeldOrder, PaymentMethod } from "@/types";
-import { createInvoiceNumber, totals } from "@/lib/utils";
+import type { CartItem, HeldOrder, PaymentMethod, SaleType } from "@/types";
+import { createInvoiceNumber } from "@/lib/utils";
+import { computeSaleTotals, unitPriceFor } from "@/lib/pricing";
 
 type PosState = {
   invoiceNumber: string;
   customerId?: string;
+  saleType: SaleType;
   items: CartItem[];
   heldOrders: HeldOrder[];
   paymentMethod: PaymentMethod;
@@ -19,6 +21,7 @@ type PosState = {
   paidAmount: number;
   addItem: (item: CartItem) => void;
   setCustomer: (customerId?: string) => void;
+  setSaleType: (saleType: SaleType) => void;
   setPaymentMethod: (paymentMethod: PaymentMethod) => void;
   setCoupon: (code?: string, discount?: number) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -29,13 +32,14 @@ type PosState = {
   setDiscount: (type: "flat" | "percentage", value: number) => void;
   setPaidAmount: (amount: number) => void;
   ensureInvoiceNumber: () => void;
-  computed: () => ReturnType<typeof totals> & { changeDue: number };
+  computed: (extra?: { groupDiscountPercent?: number; pointsRedeemed?: number }) => ReturnType<typeof computeSaleTotals> & { changeDue: number };
 };
 
 export const usePosStore = create<PosState>()(
   persist(
     (set, get) => ({
       invoiceNumber: "",
+      saleType: "retail",
       items: [],
       heldOrders: [],
       paymentMethod: "cash",
@@ -53,17 +57,23 @@ export const usePosStore = create<PosState>()(
           return { items: [...state.items, { ...item, quantity: Math.min(quantityToAdd, item.stockAvailable) }] };
         }),
       setCustomer: (customerId) => set({ customerId }),
+      setSaleType: (saleType) =>
+        set((state) => ({
+          saleType,
+          // Re-price the open cart so the toggle applies to lines already added.
+          items: state.items.map((item) => ({ ...item, unitPrice: unitPriceFor(item, saleType) })),
+        })),
       setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
       setCoupon: (couponCode, couponDiscount = 0) => set({ couponCode, couponDiscount }),
       updateQuantity: (productId, quantity) => set((state) => ({ items: state.items.map((item) => (item.productId === productId ? { ...item, quantity: Math.max(1, Math.min(quantity, item.stockAvailable)) } : item)) })),
       removeItem: (productId) => set((state) => ({ items: state.items.filter((item) => item.productId !== productId) })),
-      holdOrder: (name) => set((state) => ({ heldOrders: [...state.heldOrders, { id: crypto.randomUUID(), name, customerId: state.customerId, items: state.items, discountType: state.discountType, discountValue: state.discountValue, createdAt: new Date().toISOString() }], items: [], invoiceNumber: createInvoiceNumber() })),
+      holdOrder: (name) => set((state) => ({ heldOrders: [...state.heldOrders, { id: crypto.randomUUID(), name, customerId: state.customerId, items: state.items, saleType: state.saleType, discountType: state.discountType, discountValue: state.discountValue, createdAt: new Date().toISOString() }], items: [], invoiceNumber: createInvoiceNumber() })),
       resumeOrder: (id) => set((state) => {
         const order = state.heldOrders.find((held) => held.id === id);
         if (!order) return state;
-        return { items: order.items, customerId: order.customerId, discountType: order.discountType, discountValue: order.discountValue, heldOrders: state.heldOrders.filter((held) => held.id !== id) };
+        return { items: order.items, customerId: order.customerId, saleType: order.saleType ?? "retail", discountType: order.discountType, discountValue: order.discountValue, heldOrders: state.heldOrders.filter((held) => held.id !== id) };
       }),
-      voidOrder: () => set({ invoiceNumber: createInvoiceNumber(), customerId: undefined, items: [], discountType: "flat", discountValue: 0, couponCode: undefined, couponDiscount: 0, paidAmount: 0 }),
+      voidOrder: () => set({ invoiceNumber: createInvoiceNumber(), customerId: undefined, saleType: "retail", items: [], discountType: "flat", discountValue: 0, couponCode: undefined, couponDiscount: 0, paidAmount: 0 }),
       setDiscount: (discountType, discountValue) => set({ discountType, discountValue }),
       setPaidAmount: (paidAmount) => set({ paidAmount }),
       ensureInvoiceNumber: () => {
@@ -71,19 +81,46 @@ export const usePosStore = create<PosState>()(
           set({ invoiceNumber: createInvoiceNumber() });
         }
       },
-      computed: () => {
+      computed: (extra) => {
         const state = get();
-        const subtotal = state.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-        const orderDiscount = state.discountType === "percentage" ? (subtotal * state.discountValue) / 100 : state.discountValue;
-        const result = totals(state.items, orderDiscount);
-        const grandTotal = Math.max(result.grandTotal - (state.couponDiscount ?? 0), 0);
-        return { ...result, grandTotal, changeDue: Math.max(state.paidAmount - grandTotal, 0) };
+        const result = computeSaleTotals({
+          items: state.items,
+          discountType: state.discountType,
+          discountValue: state.discountValue,
+          couponDiscount: state.couponDiscount ?? 0,
+          groupDiscountPercent: extra?.groupDiscountPercent ?? 0,
+          pointsRedeemed: extra?.pointsRedeemed ?? 0,
+        });
+        return { ...result, changeDue: Math.max(state.paidAmount - result.grandTotal, 0) };
       },
     }),
     {
       name: "shopkeeper-pos-v1",
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ invoiceNumber: state.invoiceNumber, customerId: state.customerId, items: state.items, heldOrders: state.heldOrders, paymentMethod: state.paymentMethod, discountType: state.discountType, discountValue: state.discountValue, couponCode: state.couponCode, couponDiscount: state.couponDiscount, paidAmount: state.paidAmount }),
+      version: 2,
+      // Carts persisted before wholesale pricing have no sellingPrice or
+      // wholesalePrice. Backfill from the price they were added at, so a
+      // resumed cart keeps its total instead of re-pricing to zero.
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<PosState> | undefined;
+        if (!state || version >= 2) return state as PosState;
+        const backfill = (item: CartItem): CartItem => ({
+          ...item,
+          sellingPrice: item.sellingPrice ?? item.unitPrice,
+          wholesalePrice: item.wholesalePrice ?? 0,
+        });
+        return {
+          ...state,
+          saleType: state.saleType ?? "retail",
+          items: (state.items ?? []).map(backfill),
+          heldOrders: (state.heldOrders ?? []).map((order) => ({
+            ...order,
+            saleType: order.saleType ?? "retail",
+            items: (order.items ?? []).map(backfill),
+          })),
+        } as PosState;
+      },
+      partialize: (state) => ({ invoiceNumber: state.invoiceNumber, customerId: state.customerId, saleType: state.saleType, items: state.items, heldOrders: state.heldOrders, paymentMethod: state.paymentMethod, discountType: state.discountType, discountValue: state.discountValue, couponCode: state.couponCode, couponDiscount: state.couponDiscount, paidAmount: state.paidAmount }),
       skipHydration: true,
     },
   ),

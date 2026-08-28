@@ -21,7 +21,7 @@ async function salesTotals(shopOid: Types.ObjectId, from: Date, to: Date) {
       $group: {
         _id: null,
         sales: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, "$grandTotal", 0] } },
-        discounts: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, "$discountValue", 0] } },
+        discounts: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, { $ifNull: ["$discountTotal", "$discountValue"] }, 0] } },
         refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$grandTotal", 0] } },
       },
     },

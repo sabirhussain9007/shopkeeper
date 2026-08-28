@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       unit: row.unit ?? "pcs",
       purchasePrice: row.purchasePrice ?? row.cost ?? 0,
       sellingPrice: row.sellingPrice ?? row.price ?? 0,
+      wholesalePrice: row.wholesalePrice ?? row.wholesale ?? 0,
       taxRate: row.taxRate ?? 0,
       quantity: row.quantity ?? row.stock ?? 0,
       reorderLevel: row.reorderLevel ?? 5,
