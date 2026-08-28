@@ -11,18 +11,21 @@ export function CreateShopSuccessContent() {
   const shopId = searchParams.get("shopId");
   const sessionId = searchParams.get("session_id");
   const walletPaid = searchParams.get("paid") === "1";
-  const [status, setStatus] = useState<"loading" | "paid" | "pending">(walletPaid ? "paid" : "loading");
+  // Only the async verification result is state; the wallet and missing-session cases
+  // are known while rendering, so deriving them avoids setting state from an effect.
+  const [verified, setVerified] = useState<"paid" | "pending" | null>(null);
+  const status: "loading" | "paid" | "pending" = walletPaid
+    ? "paid"
+    : !sessionId
+      ? "pending"
+      : (verified ?? "loading");
 
   useEffect(() => {
-    if (walletPaid) return;
-    if (!sessionId) {
-      setStatus("pending");
-      return;
-    }
+    if (walletPaid || !sessionId) return;
     void fetch(`/api/shops/stripe/checkout?session_id=${encodeURIComponent(sessionId)}`)
       .then((res) => res.json())
-      .then((data: { ok?: boolean }) => setStatus(data.ok ? "paid" : "pending"))
-      .catch(() => setStatus("pending"));
+      .then((data: { ok?: boolean }) => setVerified(data.ok ? "paid" : "pending"))
+      .catch(() => setVerified("pending"));
   }, [sessionId, walletPaid]);
 
   return (

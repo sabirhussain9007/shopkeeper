@@ -75,7 +75,11 @@ export function SalesManager() {
   const [bounceRepayDate, setBounceRepayDate] = useState(() => toDateInput(new Date()));
   const [bounceRepaySelection, setBounceRepaySelection] = useState("cash");
   const [bounceRepayReference, setBounceRepayReference] = useState("");
-  const [bounceRepayChequeBankAccountId, setBounceRepayChequeBankAccountId] = useState("");
+  const [bounceRepayChequeBankAccountIdSelection, setBounceRepayChequeBankAccountId] = useState("");
+  // Defaulting to the first loaded account is derived during render rather than
+  // synced in by an effect: setting state from an effect just to mirror data the
+  // component already has forces a second render pass (react-hooks/set-state-in-effect).
+  const bounceRepayChequeBankAccountId = bounceRepayChequeBankAccountIdSelection || bankAccounts[0]?._id || "";
   const [bounceRepayChequeDate, setBounceRepayChequeDate] = useState("");
   const [bounceRepayDescription, setBounceRepayDescription] = useState("");
   const [bounceSubmitting, setBounceSubmitting] = useState(false);
@@ -315,12 +319,6 @@ export function SalesManager() {
   const bounceNeedsPaymentReference = resolvedBounceRepaySelection.paymentMethod !== "cash";
   const bounceNeedsChequeBank = resolvedBounceRepaySelection.paymentMethod === "cheque";
   const bounceNeedsChequeDate = resolvedBounceRepaySelection.paymentMethod === "cheque";
-
-  useEffect(() => {
-    if (!bounceRepayChequeBankAccountId && bankAccounts.length > 0) {
-      setBounceRepayChequeBankAccountId(bankAccounts[0]._id);
-    }
-  }, [bankAccounts, bounceRepayChequeBankAccountId]);
 
   const bounceConfirmDescription = detail
     ? bounceRecordRepay

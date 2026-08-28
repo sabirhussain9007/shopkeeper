@@ -172,7 +172,11 @@ export function LedgerManager() {
   const [direction, setDirection] = useState<"increase" | "decrease">("decrease");
   const [paymentSelection, setPaymentSelection] = useState("cash");
   const [paymentReference, setPaymentReference] = useState("");
-  const [paymentChequeBankAccountId, setPaymentChequeBankAccountId] = useState("");
+  const [paymentChequeBankAccountIdSelection, setPaymentChequeBankAccountId] = useState("");
+  // Defaulting to the first loaded account is derived during render rather than
+  // synced in by an effect: setting state from an effect just to mirror data the
+  // component already has forces a second render pass (react-hooks/set-state-in-effect).
+  const paymentChequeBankAccountId = paymentChequeBankAccountIdSelection || bankAccounts[0]?._id || "";
   const settings = useQuery({
     queryKey: ["pos-settings"],
     queryFn: async () => {
@@ -189,12 +193,6 @@ export function LedgerManager() {
   const bankAccounts = bankAccountsQuery.data?.items ?? [];
   const resolvedPaymentSelection = resolvePaymentSelection(paymentSelection, paymentAccounts);
   const paymentChequeBankName = bankAccounts.find((account) => account._id === paymentChequeBankAccountId)?.name ?? "";
-
-  useEffect(() => {
-    if (!paymentChequeBankAccountId && bankAccounts.length > 0) {
-      setPaymentChequeBankAccountId(bankAccounts[0]._id);
-    }
-  }, [bankAccounts, paymentChequeBankAccountId]);
 
   const overview = useQuery({
     queryKey: ["ledger-overview"],

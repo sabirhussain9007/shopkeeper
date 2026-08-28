@@ -87,7 +87,7 @@ export function VendorsManager() {
   const [payDate, setPayDate] = useState(() => toDateInput(new Date()));
   const [paySelection, setPaySelection] = useState("cash");
   const [payReference, setPayReference] = useState("");
-  const [payChequeBankAccountId, setPayChequeBankAccountId] = useState("");
+  const [payChequeBankAccountIdSelection, setPayChequeBankAccountId] = useState("");
   const [payChequeDate, setPayChequeDate] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [payConfirmOpen, setPayConfirmOpen] = useState(false);
@@ -99,7 +99,7 @@ export function VendorsManager() {
   const [bounceRepayDate, setBounceRepayDate] = useState(() => toDateInput(new Date()));
   const [bounceRepaySelection, setBounceRepaySelection] = useState("cash");
   const [bounceRepayReference, setBounceRepayReference] = useState("");
-  const [bounceRepayChequeBankAccountId, setBounceRepayChequeBankAccountId] = useState("");
+  const [bounceRepayChequeBankAccountIdSelection, setBounceRepayChequeBankAccountId] = useState("");
   const [bounceRepayChequeDate, setBounceRepayChequeDate] = useState("");
   const [bounceRepayDescription, setBounceRepayDescription] = useState("");
   const [bounceSubmitting, setBounceSubmitting] = useState(false);
@@ -180,6 +180,10 @@ export function VendorsManager() {
   const bankAccountsQuery = useShopPaymentAccounts({ accountType: "bank", enabled: payModalOpen || bounceModalOpen });
   const paymentAccounts = paymentAccountsQuery.data?.items ?? [];
   const bankAccounts = bankAccountsQuery.data?.items ?? [];
+  // Derived during render instead of synced in by an effect, which would set state
+  // from an effect purely to mirror data already in hand (react-hooks/set-state-in-effect).
+  const payChequeBankAccountId = payChequeBankAccountIdSelection || bankAccounts[0]?._id || "";
+  const bounceRepayChequeBankAccountId = bounceRepayChequeBankAccountIdSelection || bankAccounts[0]?._id || "";
   const resolvedPaySelection = resolvePaymentSelection(paySelection, paymentAccounts);
   const resolvedBounceRepaySelection = resolvePaymentSelection(bounceRepaySelection, paymentAccounts);
   const payChequeBankName = bankAccounts.find((account) => account._id === payChequeBankAccountId)?.name ?? "";
@@ -343,9 +347,13 @@ export function VendorsManager() {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [payModalOpen]);
 
-  useEffect(() => {
+  // Resetting during render is React's documented way to clear state on an identity
+  // change; an effect would render the new vendor once under the old filter first.
+  const [ledgerFilterVendorId, setLedgerFilterVendorId] = useState(selectedVendor?._id);
+  if (ledgerFilterVendorId !== selectedVendor?._id) {
+    setLedgerFilterVendorId(selectedVendor?._id);
     setLedgerFilter("all");
-  }, [selectedVendor?._id]);
+  }
 
   const ledgerQuery = useQuery({
     queryKey: ["supplier-ledger", selectedVendor?._id],
@@ -443,15 +451,6 @@ export function VendorsManager() {
       detailVendor.openingBalance ??
       0)
     : 0;
-
-  useEffect(() => {
-    if (!payChequeBankAccountId && bankAccounts.length > 0) {
-      setPayChequeBankAccountId(bankAccounts[0]._id);
-    }
-    if (!bounceRepayChequeBankAccountId && bankAccounts.length > 0) {
-      setBounceRepayChequeBankAccountId(bankAccounts[0]._id);
-    }
-  }, [bankAccounts, payChequeBankAccountId, bounceRepayChequeBankAccountId]);
 
   const toggleVendorDetail = (item: Vendor) => {
     setSelectedVendor((current) => (current?._id === item._id ? null : item));

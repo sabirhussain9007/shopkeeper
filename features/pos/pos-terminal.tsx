@@ -111,7 +111,11 @@ export function PosTerminal() {
   const [paymentSelection, setPaymentSelection] = useState("cash");
   const [selectedAccountName, setSelectedAccountName] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
-  const [chequeBankAccountId, setChequeBankAccountId] = useState("");
+  const [chequeBankAccountIdSelection, setChequeBankAccountId] = useState("");
+  // Defaulting to the first loaded account is derived during render rather than
+  // synced in by an effect: setting state from an effect just to mirror data the
+  // component already has forces a second render pass (react-hooks/set-state-in-effect).
+  const chequeBankAccountId = chequeBankAccountIdSelection || bankAccounts[0]?._id || "";
   const [chequeDate, setChequeDate] = useState(() => pakistanTodayKey());
   const [orderNotes, setOrderNotes] = useState("");
   const [pointsRedeemed, setPointsRedeemed] = useState(0);
@@ -337,12 +341,6 @@ export function PosTerminal() {
       setSelectedAccountName("");
     }
   }, [paymentAccounts, paymentAccountsQuery.isLoading, paymentSelection, pos, pos.paymentMethod]);
-
-  useEffect(() => {
-    if (!chequeBankAccountId && bankAccounts.length > 0) {
-      setChequeBankAccountId(bankAccounts[0]._id);
-    }
-  }, [bankAccounts, chequeBankAccountId]);
 
   const cashReceiptCustomerName = cashCustomerName.trim() || "Walk-in customer";
 

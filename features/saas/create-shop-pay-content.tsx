@@ -48,15 +48,15 @@ export function CreateShopPayContent() {
 
   const [details, setDetails] = useState<PayDetails | null>(null);
   const [gatewayForm, setGatewayForm] = useState<{ actionUrl: string; fields: Record<string, string> } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(true);
+  // Without a shop and provider there is nothing to fetch, so that is derived here
+  // rather than pushed into state by the effect below.
+  const loading = Boolean(shopId && provider) && fetching;
   const [tid, setTid] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!shopId || !provider) {
-      setLoading(false);
-      return;
-    }
+    if (!shopId || !provider) return;
 
     void fetch(`/api/shops/wallet/checkout?shopId=${encodeURIComponent(shopId)}&provider=${provider}`)
       .then(async (res) => {
@@ -78,7 +78,7 @@ export function CreateShopPayContent() {
       .catch((error: unknown) => {
         toast.error(error instanceof Error ? error.message : "Unable to load payment.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => setFetching(false));
   }, [provider, shopId]);
 
   async function confirmAppPayment() {
