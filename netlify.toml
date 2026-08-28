@@ -1,0 +1,33 @@
+# Netlify build config for Shopkeeper.
+# The Next.js runtime plugin is what turns `.next` into Netlify Functions +
+# CDN assets; without it the App Router, Route Handlers and proxy.ts do not run.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Next 16 requires Node >= 20.9. Pinned so a change to Netlify's default
+  # image cannot silently move the build off a tested runtime.
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# --- Deployment origin ------------------------------------------------------
+# lib/site.ts throws when the origin is missing, so every context must supply
+# one or the build fails. Values here are literal strings (netlify.toml does
+# not interpolate env vars) and are exposed to both the build and the runtime
+# functions, which is what server-rendered canonicals, robots.txt, sitemap.xml
+# and payment return URLs need.
+#
+# Secrets (MONGODB_URI, NEXTAUTH_SECRET, PAYMENT_*, gateway keys) belong in the
+# Netlify UI under Site configuration -> Environment variables, never here.
+
+[context.production.environment]
+  NEXT_PUBLIC_APP_URL = "https://shopkeeper-app.netlify.app"
+  NEXTAUTH_URL = "https://shopkeeper-app.netlify.app"
+
+# Deploy previews and branch deploys get a per-deploy hostname that cannot be
+# written down here, so they fall through to Netlify's own DEPLOY_PRIME_URL
+# (see the resolver in lib/site.ts).

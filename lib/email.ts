@@ -1,3 +1,5 @@
+import { siteUrl } from "@/lib/site";
+
 type EmailPayload = {
   to: string;
   subject: string;
@@ -28,8 +30,7 @@ export async function sendEmail(payload: EmailPayload) {
 }
 
 export function passwordResetEmail(to: string, token: string) {
-  const appUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const link = `${appUrl}/reset-password?token=${token}`;
+  const link = `${siteUrl}/reset-password?token=${token}`;
   return sendEmail({
     to,
     subject: "Reset your Shopkeeper password",
@@ -39,8 +40,7 @@ export function passwordResetEmail(to: string, token: string) {
 }
 
 export function verifyEmailMessage(to: string, token: string) {
-  const appUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const link = `${appUrl}/api/auth/verify-email?token=${token}`;
+  const link = `${siteUrl}/api/auth/verify-email?token=${token}`;
   return sendEmail({
     to,
     subject: "Verify your Shopkeeper email",
