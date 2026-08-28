@@ -1,92 +1,27 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Download, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Download, Plus } from "lucide-react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 import { DataToolbar, PaginationBar } from "@/components/crud/data-toolbar";
-import { TableLoader } from "@/components/ui/loader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useCrud } from "@/hooks/use-crud";
-import { hierarchicalCategoryOptions, type CategoryOption } from "@/lib/categories";
 import { isRecordDeleted } from "@/lib/soft-delete";
-import { currency, percentage } from "@/lib/utils";
-import { productSchema } from "@/schemas/domain";
 import { exportRowsToPdf } from "@/services/report-export";
-import type { BrandInput, CategoryInput, ProductInput, SupplierInput } from "@/types";
-
-type Product = ProductInput & {
-  _id: string;
-  category?: string | { _id: string };
-  supplier?: string | { _id: string };
-  brandId?: string | { _id: string };
-  deletedAt?: string | null;
-};
-type Category = CategoryInput & CategoryOption & { _id: string };
-type Vendor = SupplierInput & { _id: string; supplierName: string };
-type Brand = BrandInput & { _id: string };
-
-function resourceId(value?: string | { _id: string }) {
-  if (!value) return "";
-  return typeof value === "object" ? String(value._id) : String(value);
-}
-
-const formSchema = productSchema;
-type FormValues = z.input<typeof formSchema>;
-
-const emptyValues: FormValues = {
-  productName: "",
-  sku: "",
-  barcode: "",
-  category: "",
-  brandId: "",
-  unit: "pcs",
-  purchasePrice: 0,
-  sellingPrice: 0,
-  taxRate: 0,
-  quantity: 0,
-  reorderLevel: 5,
-  supplier: "",
-  productImage: "",
-  description: "",
-  status: "active",
-};
-
-function profitInfo(purchase: number, selling: number) {
-  const profit = selling - purchase;
-  const margin = selling > 0 ? (profit / selling) * 100 : 0;
-  return { profit, margin };
-}
+import { emptyValues, formSchema, productToFormValues, resourceId, type FormValues, type Product } from "./inventory-utils";
+import { ProductFormDialog, useProductForm } from "./product-form-dialog";
+import { ProductTable } from "./product-table";
+import { useInventoryData } from "./use-inventory-data";
 
 export function InventoryManager() {
-  const { list, create, update, remove, params, setParams } = useCrud<ProductInput, Product>("products");
-  const categoriesCrud = useCrud<CategoryInput, Category>("categories", { limit: 100 });
-  const vendorsCrud = useCrud<SupplierInput, Vendor>("suppliers", { limit: 100 });
-  const brandsCrud = useCrud<BrandInput, Brand>("brands", { limit: 100 });
+  const { list, create, update, remove, params, setParams, categoryOptions, brands, vendors, vendorNameById, restoreProduct } =
+    useInventoryData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
-  const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: emptyValues });
-  const purchasePrice = form.watch("purchasePrice");
-  const sellingPrice = form.watch("sellingPrice");
-  const profit = useMemo(() => profitInfo(Number(purchasePrice) || 0, Number(sellingPrice) || 0), [purchasePrice, sellingPrice]);
-
-  const categories = categoriesCrud.list.data?.items ?? [];
-  const categoryOptions = useMemo(() => hierarchicalCategoryOptions(categories), [categories]);
-  const brands = brandsCrud.list.data?.items ?? [];
-  const vendors = useMemo(() => vendorsCrud.list.data?.items ?? [], [vendorsCrud.list.data?.items]);
-  const vendorNameById = useMemo(() => new Map(vendors.map((v) => [resourceId(v._id), v.supplierName])), [vendors]);
+  const form = useProductForm();
 
   const openCreate = () => {
     setEditing(null);
@@ -96,23 +31,7 @@ export function InventoryManager() {
 
   const openEdit = (item: Product) => {
     setEditing(item);
-    form.reset({
-      productName: item.productName,
-      sku: item.sku,
-      barcode: item.barcode ?? "",
-      category: resourceId(item.category),
-      brandId: resourceId(item.brandId),
-      unit: item.unit ?? "pcs",
-      purchasePrice: item.purchasePrice,
-      sellingPrice: item.sellingPrice,
-      taxRate: item.taxRate,
-      quantity: item.quantity,
-      reorderLevel: item.reorderLevel,
-      supplier: resourceId(item.supplier),
-      productImage: item.productImage ?? "",
-      description: item.description ?? "",
-      status: item.status,
-    });
+    form.reset(productToFormValues(item));
     setDialogOpen(true);
   };
 
@@ -129,9 +48,7 @@ export function InventoryManager() {
 
   const onRestore = async (item: Product) => {
     try {
-      const response = await fetch(`/api/products/${resourceId(item._id)}/restore`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Unable to restore product.");
+      await restoreProduct(resourceId(item._id));
       toast.success(`"${item.productName}" restored.`);
       await list.refetch();
     } catch (error) {
@@ -207,97 +124,17 @@ export function InventoryManager() {
             </Button>
           }
         />
-        <div className="responsive-table-shell responsive-table-shell--lg">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-100 bg-[var(--panel)] text-zinc-600">
-              <tr>
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">SKU</th>
-                <th className="px-4 py-3 font-medium">Qty</th>
-                <th className="px-4 py-3 font-medium">Purchase</th>
-                <th className="px-4 py-3 font-medium">Selling</th>
-                <th className="px-4 py-3 font-medium">Profit</th>
-                <th className="px-4 py-3 font-medium">Vendor</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && items.length === 0 ? (
-                <TableLoader colSpan={9} label="Loading products..." />
-              ) : list.isError ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
-                    <p>{list.error instanceof Error ? list.error.message : "Unable to load products."}</p>
-                    <Button className="mt-3" size="sm" variant="secondary" onClick={() => void list.refetch()}>
-                      Retry
-                    </Button>
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-500">
-                    No products found. Add your first product.
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => {
-                  const { profit: lineProfit, margin } = profitInfo(item.purchasePrice, item.sellingPrice);
-                  const lowStock = item.quantity <= item.reorderLevel;
-                  const deleted = isRecordDeleted(item);
-                  return (
-                    <tr key={resourceId(item._id)} className="border-t border-zinc-100 hover:bg-emerald-50/60">
-                      <td className="px-4 py-3">
-                        <div className={`font-medium ${deleted ? "text-zinc-400 line-through" : ""}`}>{item.productName}</div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {deleted ? <Badge variant="warning">Deleted</Badge> : null}
-                          {!deleted && lowStock ? <Badge variant="warning">Low stock</Badge> : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500">{item.sku}</td>
-                      <td className="px-4 py-3">{item.quantity}</td>
-                      <td className="px-4 py-3">{currency(item.purchasePrice)}</td>
-                      <td className="px-4 py-3">{currency(item.sellingPrice)}</td>
-                      <td className="px-4 py-3">
-                        <div>{currency(lineProfit)}</div>
-                        <div className="text-xs text-zinc-500">{percentage(margin)}</div>
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500">
-                        {item.supplier ? vendorNameById.get(resourceId(item.supplier)) ?? "—" : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={item.status === "active" ? "success" : "default"}>{item.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          {deleted ? (
-                            <>
-                              <Button size="sm" variant="secondary" onClick={() => void onRestore(item)}>
-                                Restore
-                              </Button>
-                              <Button size="sm" variant="danger" onClick={() => setDeleteTarget(item)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="danger" onClick={() => setDeleteTarget(item)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ProductTable
+          items={items}
+          isLoading={isLoading}
+          isError={list.isError}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          vendorNameById={vendorNameById}
+          onEdit={openEdit}
+          onDelete={setDeleteTarget}
+          onRestore={(item) => void onRestore(item)}
+        />
         <PaginationBar
           page={list.data?.page ?? 1}
           pages={list.data?.pages ?? 1}
@@ -306,119 +143,17 @@ export function InventoryManager() {
         />
       </Surface>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent
-          title={editing ? "Edit Product" : "New Product"}
-          description="Track pricing, stock, tax, and category."
-          className="max-w-3xl"
-        >
-          <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <Label htmlFor="productName">Product Name</Label>
-              <Input id="productName" className="mt-1.5" {...form.register("productName")} />
-            </div>
-            <div>
-              <Label htmlFor="sku">SKU</Label>
-              <Input id="sku" className="mt-1.5" {...form.register("sku")} />
-            </div>
-            <div>
-              <Label htmlFor="barcode">Barcode</Label>
-              <Input id="barcode" className="mt-1.5" {...form.register("barcode")} />
-            </div>
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Select id="category" className="mt-1.5" {...form.register("category")}>
-                <option value="">No category</option>
-                {categoryOptions.map((option) => (
-                  <option key={option._id} value={option._id}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-              {form.formState.errors.category ? (
-                <p className="mt-1 text-xs text-red-500">{form.formState.errors.category.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <Label htmlFor="vendor">Vendor</Label>
-              <Select id="vendor" className="mt-1.5" {...form.register("supplier")}>
-                <option value="">No vendor</option>
-                {vendors.map((v) => (
-                  <option key={v._id} value={v._id}>
-                    {v.supplierName}
-                  </option>
-                ))}
-              </Select>
-              {form.formState.errors.supplier ? (
-                <p className="mt-1 text-xs text-red-500">{form.formState.errors.supplier.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <Label htmlFor="brandId">Brand</Label>
-              <Select id="brandId" className="mt-1.5" {...form.register("brandId")}>
-                <option value="">No brand</option>
-                {brands.map((brand) => (
-                  <option key={brand._id} value={brand._id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </Select>
-              {form.formState.errors.brandId ? (
-                <p className="mt-1 text-xs text-red-500">{form.formState.errors.brandId.message}</p>
-              ) : null}
-            </div>
-            <div>
-              <Label htmlFor="unit">Unit</Label>
-              <Input id="unit" className="mt-1.5" {...form.register("unit")} />
-            </div>
-            <div>
-              <Label htmlFor="purchasePrice">Purchase Price</Label>
-              <Input id="purchasePrice" type="number" min={0} className="mt-1.5" {...form.register("purchasePrice", { valueAsNumber: true })} />
-            </div>
-            <div>
-              <Label htmlFor="sellingPrice">Selling Price</Label>
-              <Input id="sellingPrice" type="number" min={0} className="mt-1.5" {...form.register("sellingPrice", { valueAsNumber: true })} />
-            </div>
-            <div>
-              <Label htmlFor="taxRate">Tax Rate (%)</Label>
-              <Input id="taxRate" type="number" min={0} max={100} className="mt-1.5" {...form.register("taxRate", { valueAsNumber: true })} />
-            </div>
-            <div>
-              <Label htmlFor="reorderLevel">Reorder Level</Label>
-              <Input id="reorderLevel" type="number" min={0} className="mt-1.5" {...form.register("reorderLevel", { valueAsNumber: true })} />
-            </div>
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select id="status" className="mt-1.5" {...form.register("status")}>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </Select>
-            </div>
-            <div className="md:col-span-2 rounded-xl bg-emerald-50 p-4 dark:bg-emerald-500/10">
-              <div className="flex items-center gap-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                <TrendingUp className="h-4 w-4" />
-                Smart Profit Calculator
-              </div>
-              <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
-                <span>Profit: {currency(profit.profit)}</span>
-                <span>Margin: {percentage(profit.margin)}</span>
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" className="mt-1.5" {...form.register("description")} />
-            </div>
-            <div className="md:col-span-2 flex justify-end gap-3">
-              <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : editing ? "Save changes" : "Create Product"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ProductFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        isEditing={!!editing}
+        isSaving={isSaving}
+        form={form}
+        onSubmit={onSubmit}
+        categoryOptions={categoryOptions}
+        brands={brands}
+        vendors={vendors}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
